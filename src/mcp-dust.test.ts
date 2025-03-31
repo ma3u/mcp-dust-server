@@ -1,9 +1,11 @@
-// test/mcp-dust.test.ts
-import { McpClient } from "@modelcontextprotocol/sdk/client/mcp.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+// src/mcp-dust.test.ts
+import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js";
+import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
 import { z } from 'zod';
 import * as dotenv from 'dotenv';
 import { setTimeout } from 'node:timers/promises';
+import * as readline from 'readline';
+import { test } from 'node:test';
 
 dotenv.config();
 
@@ -40,9 +42,53 @@ const ErrorResponseSchema = z.object({
   isError: z.boolean().optional()
 });
 
+// Custom transport implementation to connect to the running server via HTTP
+class HttpTransport implements Transport {
+  private baseUrl: string;
+
+  constructor(baseUrl: string) {
+    this.baseUrl = baseUrl;
+  }
+
+  async send(message: any): Promise<void> {
+    try {
+      const response = await fetch(`${this.baseUrl}/rpc`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(message),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
+      const data = await response.json();
+      this.onMessage?.(data);
+    } catch (error) {
+      console.error('Transport error:', error);
+      this.onError?.(error instanceof Error ? error : new Error(String(error)));
+    }
+  }
+
+  onMessage?: (message: any) => void;
+  onError?: (error: Error) => void;
+
+  close(): void {
+    // No persistent connection to close with HTTP
+    console.log('HTTP transport closed');
+  }
+}
+
 async function testMcpConnection() {
-  const client = new McpClient();
-  const transport = new StdioClientTransport();
+  const client = new McpClient({
+    name: "mcp-dust-client",
+    version: "1.0.0"
+  });
+  
+  // Create a custom transport to communicate with the running server
+  const transport = new HttpTransport('http://localhost:3000');
 
   try {
     // Connection sequence
@@ -51,8 +97,11 @@ async function testMcpConnection() {
 
     // Test valid query
     console.log("🚀 Sending valid query...");
-    const validResponse = await client.callTool("dust-query", {
-      query: TEST_CONFIG.testMessage
+    const validResponse = await client.callTool({
+      name: "dust-query", 
+      arguments: {
+        query: TEST_CONFIG.testMessage
+      }
     });
 
     const validResult = SuccessResponseSchema.safeParse(validResponse);
@@ -65,8 +114,11 @@ async function testMcpConnection() {
 
     // Test invalid query
     console.log("🚨 Sending invalid query...");
-    const invalidResponse = await client.callTool("dust-query", {
-      query: TEST_CONFIG.invalidMessage
+    const invalidResponse = await client.callTool({
+      name: "dust-query", 
+      arguments: {
+        query: TEST_CONFIG.invalidMessage
+      }
     });
 
     const invalidResult = ErrorResponseSchema.safeParse(invalidResponse);
@@ -80,24 +132,24 @@ async function testMcpConnection() {
   } catch (error) {
     console.error("💥 Connection failed:", error instanceof Error ? error.message : error);
   } finally {
-    await transport.disconnect();
+    // Close the connection via transport
+    transport.close();
   }
 }
 
-async function runTests() {
+// Run test with Node.js test runner
+test('MCP Dust Server Tools', async () => {
   for (let attempt = 1; attempt <= TEST_CONFIG.maxRetries; attempt++) {
     try {
       console.log(`🔁 Test attempt ${attempt}/${TEST_CONFIG.maxRetries}`);
       await testMcpConnection();
       break;
     } catch (error) {
+      console.error(`Error in attempt ${attempt}:`, error);
       if (attempt === TEST_CONFIG.maxRetries) {
-        console.error("❌ All test attempts failed");
-        process.exit(1);
+        throw new Error("All test attempts failed");
       }
       await setTimeout(TEST_CONFIG.retryDelay);
     }
   }
-}
-
-runTests();
+});
