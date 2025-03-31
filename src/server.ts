@@ -16,10 +16,20 @@ const dustAPI = new DustAPI(
   console
 );
 
-// Create an MCP server
+// Create an MCP server with request and response logging
 const server = new McpServer({ 
   name: process.env.MCP_NAME || "Dust MCP Bridge", 
-  version: "1.0.0" 
+  version: "1.0.0",
+  onRequest: (request: any) => {
+    console.log("\n🔵 MCP REQUEST:", JSON.stringify(request, null, 2));
+  },
+  onResponse: (response: any) => {
+    console.log("\n🟢 MCP RESPONSE:", JSON.stringify(response, null, 2));
+  },
+  onError: (error: Error) => {
+    console.error("\n🔴 MCP ERROR:", error.message);
+    console.error(error.stack);
+  }
 });
 
 // Add a simple echo tool to verify server functionality
@@ -144,10 +154,18 @@ server.tool("dust-query", "Send a query to your Dust AI agent", {
 // Start the server
 async function main() {
   try {
+    // Use MCP configuration from .env
+    const host = process.env.MCP_HOST || '127.0.0.1';
+    const port = parseInt(process.env.MCP_PORT || '5001', 10);
+    const timeout = parseInt(process.env.MCP_TIMEOUT || '30', 10) * 1000; // Convert to ms
+    
+    // Use StdioServerTransport for direct CLI usage
     const transport = new StdioServerTransport();
     await server.connect(transport);
+    
     console.log("MCP Server running...");
     console.log(`Server name: ${process.env.MCP_NAME || "Dust MCP Bridge"}`);
+    console.log(`Server host: ${host}:${port} (timeout: ${timeout/1000}s)`);
     console.log(`Dust workspace: ${process.env.DUST_WORKSPACE_ID || "(not configured)"}`);
     console.log(`Dust agent: ${process.env.DUST_AGENT_ID || "(not configured)"}`);
   } catch (error) {

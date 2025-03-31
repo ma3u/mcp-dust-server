@@ -1,6 +1,7 @@
 // src/mcp-dust.test.ts
 import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js";
-import { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
+// Not importing Transport as it's causing module resolution issues
+// Instead, we'll implement the transport interface with the required methods
 import { z } from 'zod';
 import * as dotenv from 'dotenv';
 import { setTimeout } from 'node:timers/promises';
@@ -13,7 +14,7 @@ dotenv.config();
 const TEST_CONFIG = {
   maxRetries: 3,
   retryDelay: 1000,
-  testMessage: "Explain quantum computing basics",
+  testMessage: "Explain systems thinking, cognitive neuroscience, and problem-solving strategies.",
   invalidMessage: ""
 };
 
@@ -43,16 +44,27 @@ const ErrorResponseSchema = z.object({
 });
 
 // Custom transport implementation to connect to the running server via HTTP
-class HttpTransport implements Transport {
+// Implements the Transport interface methods without the 'implements' clause
+class HttpTransport {
   private baseUrl: string;
+  private isStarted: boolean = false;
 
   constructor(baseUrl: string) {
     this.baseUrl = baseUrl;
   }
 
+  async start(): Promise<void> {
+    console.log(`Connecting to MCP server at ${this.baseUrl}`);
+    this.isStarted = true;
+  }
+
   async send(message: any): Promise<void> {
+    if (!this.isStarted) {
+      throw new Error('Transport not started. Call start() first');
+    }
+    
     try {
-      const response = await fetch(`${this.baseUrl}/rpc`, {
+      const response = await fetch(`${this.baseUrl}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -75,20 +87,27 @@ class HttpTransport implements Transport {
   onMessage?: (message: any) => void;
   onError?: (error: Error) => void;
 
-  close(): void {
+  async close(): Promise<void> {
     // No persistent connection to close with HTTP
     console.log('HTTP transport closed');
+    this.isStarted = false;
   }
 }
 
 async function testMcpConnection() {
+  // Get MCP configuration from environment variables
+  const mcpHost = process.env.MCP_HOST || '127.0.0.1';
+  const mcpPort = parseInt(process.env.MCP_PORT || '5001', 10);
+  
   const client = new McpClient({
     name: "mcp-dust-client",
-    version: "1.0.0"
+    version: "1.0.0",
+    requestTimeout: 30000 // 30 seconds timeout to match server config
   });
   
   // Create a custom transport to communicate with the running server
-  const transport = new HttpTransport('http://localhost:3000');
+  console.log(`Connecting to MCP server at ${mcpHost}:${mcpPort}`);
+  const transport = new HttpTransport(`http://${mcpHost}:${mcpPort}`);
 
   try {
     // Connection sequence
