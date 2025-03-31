@@ -42,36 +42,32 @@ This project implements an MCP server that acts as a bridge between development 
 
 ## Configuration
 
-The server requires several environment variables to be set in your `.env` file:
+The server requires several environment variables to be set in your `.env` file. You can copy the example below and update the values according to your setup:
 
-### MCP Server Configuration
-```
-MCP_NAME = 'Dust MCP Server JS'
-MCP_HOST = '127.0.0.1'
-MCP_PORT = '5001'
-MCP_TIMEOUT = '30'  # seconds
-```
+```bash
+# MCP Server Configuration
+MCP_NAME=Dust MCP Server JS
+MCP_HOST=127.0.0.1
+MCP_PORT=5001
+MCP_TIMEOUT=30 # seconds
 
-### Dust API Configuration
-```
-DUST_API_KEY=your_dust_api_key
-DUST_WORKSPACE_ID=your_workspace_id
-DUST_AGENT_ID=your_agent_id
+# Dust API Configuration
+DUST_API_KEY=your_dust_api_key_here
+DUST_WORKSPACE_ID=your_workspace_id_here
+DUST_AGENT_ID=your_agent_id_here
 DUST_DOMAIN=https://dust.tt
-```
 
-### User Context Information
-```
-DUST_USERNAME=Your Name
-DUST_EMAIL=your.email@example.com
+# User Context Information (used in Dust API requests)
+DUST_USERNAME=your_username
+DUST_EMAIL=your_email@example.com
 DUST_FULLNAME=Your Full Name
 DUST_TIMEZONE=Europe/Berlin
-```
 
-### Server Configuration
-```
+# Server Configuration
 PORT=3000
 ```
+
+Make sure to replace all placeholder values with your actual configuration.
 
 ## Starting the Server
 
@@ -164,6 +160,19 @@ Sends a query to your configured Dust agent and returns the response.
 
 **Parameters:**
 - `query`: Your question or request for the AI agent
+
+## Testing
+
+### Running Tests with Node.js 23.10.0
+
+For Node.js 23.10.0 with ESM support, use the following command to run tests:
+
+```bash
+NODE_OPTIONS='--import ts-node/esm --no-warnings' 
+TS_NODE_PROJECT=test/tsconfig.json node --test src/mcp-dust.test.ts
+```
+
+This command enables proper ESM support when running TypeScript tests.
 
 ## Troubleshooting
 

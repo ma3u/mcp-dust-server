@@ -10,13 +10,15 @@
   "license": "ISC",
   "description": "",
   "devDependencies": {
+    "@modelcontextprotocol/sdk": "^1.8.0",
+    "@tsconfig/node23": "^23.0.1",
     "@types/node": "^22.13.14",
     "ts-node": "^10.9.2",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "zod": "^3.24.2"
   },
   "dependencies": {
     "@dust-tt/client": "^1.0.32",
-    "@modelcontextprotocol/sdk": "^1.8.0",
     "dotenv": "^16.4.7"
   }
 }
