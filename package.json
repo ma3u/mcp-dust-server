@@ -13,6 +13,7 @@
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
     "@tsconfig/node23": "^23.0.1",
+    "@types/eventsource": "^1.1.15",
     "@types/node": "^22.13.14",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2",
