@@ -128,84 +128,13 @@ Use SystemsThinking Agent to analyze our current architecture and suggest improv
 ```
 
 ### Verification Script:
-Create a test file `test-integration.ts` to verify your setup:
-
-```typescript
-import { config } from 'dotenv';
-import fetch from 'node-fetch';
-
-config();
-
-const baseUrl = `http://${process.env.MCP_HOST || '127.0.0.1'}:${process.env.MCP_PORT || '5001'}`;
-
-async function testIntegration() {
-  const response = await fetch(`${baseUrl}/query`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      jsonrpc: '2.0',
-      id: 1,
-      method: 'executeToolCall',
-      params: {
-        toolCall: {
-          id: 'query-1',
-          name: 'query',
-          parameters: {
-            prompt: `Explain systems thinking, cognitive neuroscience, and problem-solving strategies.`,
-          },
-        },
-      },
-    }),
-  });
-
-  const result = await response.json();
-  console.log('Agent Response:', result);
-}
-
-testIntegration();
-```
+run the verification script `src/test-integration.ts` to verify your setup:
 
 Run the script using:
 ```bash
-npx ts-node test-integration.ts
+npx ts-node src/test-integration.ts
 ```
 
----
-
-## Troubleshooting
-
-### Common Issues
-
-#### Connection Refused:
-Ensure the server is running and accessible at the configured host and port:
-```bash
-curl -v http://127.0.0.1:5001/health
-```
-
-#### Authentication Errors:
-Verify your Dust credentials using this command:
-```bash
-curl -H "Authorization: Bearer $DUST_API_KEY" \
-  https://dust.tt/api/v1/w/$DUST_WORKSPACE_ID/assistants/$DUST_AGENT_ID
-```
-
-#### Timeout Issues:
-Increase timeout in `.env` if needed:
-```env
-MCP_TIMEOUT=60 # seconds
-```
-
----
-
-## Development Notes
-
-### Live Reloading for Development:
-Install `nodemon` for automatic server restarts during development:
-```bash
-npm install --save-dev nodemon
-
-nodemon --watch src --exec "npx ts-node src/server.ts"
-```
 
 ---
 

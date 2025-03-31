@@ -1,54 +1,50 @@
-// Updated EventSource import and type assertion
 import { config } from 'dotenv';
 import fetch from 'node-fetch';
-import EventSource from 'eventsource';
+import * as EventSource from 'eventsource';
 
+// Load environment variables
 config();
 
-class SystemsThinkingMCPTest {
+class DustMCPClient {
   private host: string;
   private port: number;
   private baseUrl: string;
-  private agentName: string;
 
   constructor() {
     this.host = process.env.MCP_HOST || '127.0.0.1';
     this.port = parseInt(process.env.MCP_PORT || '5001');
     this.baseUrl = `http://${this.host}:${this.port}`;
-    this.agentName = process.env.DUST_AGENT_NAME || 'SystemsThinking';
     
-    console.log(`Configured MCP server at: ${this.baseUrl}`);
-    console.log(`Using agent: ${this.agentName}`);
+    console.log(`Connecting to MCP server at: ${this.baseUrl}`);
   }
 
   async runTest() {
     try {
-      console.log(`Connecting to MCP server at ${this.baseUrl}/sse`);
+      console.log('Establishing SSE connection...');
       
-      // Corrected EventSource initialization
-      const es = new (EventSource as unknown as {
-        new(url: string, eventSourceInitDict?: EventSource.EventSourceInit): EventSource
-      })(`${this.baseUrl}/sse`);
-
+      // Create EventSource with proper type handling
+      const es = new (EventSource as any)(`${this.baseUrl}/sse`);
+      
+      // Track the complete response
+      let fullResponse = '';
+      
       // Wait for endpoint event
       const messagesEndpoint = await new Promise<string>((resolve, reject) => {
-        es.addEventListener('endpoint', (event: MessageEvent) => {
+        es.addEventListener('endpoint', (event: any) => {
           console.log(`Received endpoint: ${event.data}`);
           resolve(event.data);
         });
-
-        es.onerror = (error: Event) => {
+        
+        es.onerror = (error: any) => {
           console.error('SSE connection error:', error);
           reject(error);
         };
-
-        setTimeout(() => {
-          reject(new Error('Timeout waiting for endpoint event'));
-        }, 5000);
+        
+        setTimeout(() => reject(new Error('Connection timeout')), 5000);
       });
-
+      
       // Initialize connection
-      console.log(`Initializing connection to ${messagesEndpoint}`);
+      console.log(`Initializing connection via ${messagesEndpoint}`);
       const initResponse = await fetch(`${this.baseUrl}${messagesEndpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -63,18 +59,18 @@ class SystemsThinkingMCPTest {
               roots: { listChanged: true }
             },
             clientInfo: {
-              name: 'systems-thinking-test',
+              name: 'cognitive-systems-test',
               version: '0.0.1'
             }
           }
         })
       });
-
+      
       const initResult = await initResponse.json();
-      console.log('Initialization result:', initResult);
-
-      // Send query
-      console.log('Sending query...');
+      console.log('Initialization completed:', initResult);
+      
+      // Send the test query about systems thinking
+      console.log('Sending cognitive neuroscience analysis query...');
       const queryResponse = await fetch(`${this.baseUrl}${messagesEndpoint}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -84,34 +80,48 @@ class SystemsThinkingMCPTest {
           method: 'executeToolCall',
           params: {
             toolCall: {
-              id: 'query-1',
+              id: 'systems-query-1',
               name: 'query',
               parameters: {
-                prompt: `Explain systems thinking, cognitive neuroscience, and problem-solving strategies.`
+                prompt: 'Use SystemsThinking Agent to analyze our current architecture and suggest improvements based on cognitive neuroscience principles.'
               }
             }
           }
         })
       });
-
+      
       const queryResult = await queryResponse.json();
-      console.log('Query result:', queryResult);
-
-      // Handle messages
-      es.addEventListener('message', (event: MessageEvent) => {
+      console.log('Query sent successfully:', queryResult);
+      
+      // Process streaming responses
+      es.addEventListener('message', (event: any) => {
         try {
           const data = JSON.parse(event.data);
-          console.log('Received message:', data);
+          
+          // Extract content from tool call results
+          if (data.method === 'partialToolCallResult' || data.method === 'finalToolCallResult') {
+            if (data.params?.result?.content) {
+              const content = data.params.result.content;
+              fullResponse += content;
+              console.log(`Received content chunk (${content.length} chars)`);
+            }
+          }
         } catch (error) {
-          console.error('JSON parse error:', error);
+          console.error('Error processing message:', error);
         }
       });
-
-      console.log('Waiting for response stream (30 seconds)...');
+      
+      // Wait for complete response
+      console.log('Waiting for complete response (30 seconds)...');
       await new Promise(resolve => setTimeout(resolve, 30000));
       
+      // Display final response
+      console.log('\n===== SYSTEMS THINKING ANALYSIS RESPONSE =====');
+      console.log(fullResponse || 'No response received');
+      console.log('=====            END OF RESPONSE          =====\n');
+      
       es.close();
-      console.log('Test completed');
+      console.log('MCP connection closed');
     } catch (error) {
       console.error('Test failed:', error);
     }
@@ -119,5 +129,5 @@ class SystemsThinkingMCPTest {
 }
 
 // Execute the test
-const test = new SystemsThinkingMCPTest();
-test.runTest();
+const client = new DustMCPClient();
+client.runTest();

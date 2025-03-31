@@ -16,6 +16,15 @@ const dustAPI = new DustAPI(
   console
 );
 
+// Define user context for conversations
+const userContext = {
+  timezone: process.env.DUST_TIMEZONE || "UTC",
+  username: process.env.DUST_USERNAME || "user",
+  email: process.env.DUST_EMAIL || "user@example.com",
+  fullName: process.env.DUST_FULLNAME || "User",
+  origin: "mcp-server" // Identifies requests coming from this MCP server
+};
+
 // Create an MCP server with request and response logging
 const server = new McpServer({ 
   name: process.env.MCP_NAME || "Dust MCP Bridge", 
