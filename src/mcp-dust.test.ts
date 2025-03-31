@@ -1,174 +1,133 @@
-// src/mcp-dust.test.ts
-import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js";
-// Not importing Transport as it's causing module resolution issues
-// Instead, we'll implement the transport interface with the required methods
-import { z } from 'zod';
-import * as dotenv from 'dotenv';
-import { setTimeout } from 'node:timers/promises';
-import * as readline from 'readline';
-import { test } from 'node:test';
+// The class connects to an MCP server using environment variables from a .env file and follows the MCP protocol to establish a session, initialize communication, and send a query to the server.
 
-dotenv.config();
+import { config } from 'dotenv';
+import fetch from 'node-fetch';
+import EventSource from 'eventsource';
 
-// Test configuration
-const TEST_CONFIG = {
-  maxRetries: 3,
-  retryDelay: 1000,
-  testMessage: "Explain systems thinking, cognitive neuroscience, and problem-solving strategies.",
-  invalidMessage: ""
-};
+// Load environment variables from .env file
+config();
 
-// Response validation schemas
-const SuccessResponseSchema = z.object({
-  content: z.array(z.object({
-    type: z.literal("structured"),
-    data: z.object({
-      conversationId: z.string().length(20),
-      messageId: z.string().length(20),
-      timestamp: z.string().datetime()
-    }),
-    text: z.string()
-  }))
-});
-
-const ErrorResponseSchema = z.object({
-  content: z.array(z.object({
-    type: z.literal("text"),
-    text: z.string(),
-    metadata: z.object({
-      code: z.string().optional(),
-      severity: z.string().optional()
-    }).optional()
-  })),
-  isError: z.boolean().optional()
-});
-
-// Custom transport implementation to connect to the running server via HTTP
-// Implements the Transport interface methods without the 'implements' clause
-class HttpTransport {
+class SystemsThinkingMCPTest {
+  private host: string;
+  private port: number;
   private baseUrl: string;
-  private isStarted: boolean = false;
+  private agentName: string;
 
-  constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
-  }
-
-  async start(): Promise<void> {
-    console.log(`Connecting to MCP server at ${this.baseUrl}`);
-    this.isStarted = true;
-  }
-
-  async send(message: any): Promise<void> {
-    if (!this.isStarted) {
-      throw new Error('Transport not started. Call start() first');
-    }
+  constructor() {
+    // Load configuration from .env
+    this.host = process.env.MCP_HOST || '127.0.0.1';
+    this.port = parseInt(process.env.MCP_PORT || '5001');
+    this.baseUrl = `http://${this.host}:${this.port}`;
+    this.agentName = process.env.DUST_AGENT_NAME || 'SystemsThinking';
     
+    console.log(`Configured MCP server at: ${this.baseUrl}`);
+    console.log(`Using agent: ${this.agentName}`);
+  }
+
+  async runTest() {
     try {
-      const response = await fetch(`${this.baseUrl}`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(message),
+      console.log(`Connecting to MCP server at ${this.baseUrl}/sse`);
+      
+      // 1. Connect to /sse endpoint to establish SSE connection
+      const es = new EventSource(`${this.baseUrl}/sse`);
+      
+      // 2. Wait for the endpoint event that provides the messaging URL
+      const messagesEndpoint = await new Promise<string>((resolve, reject) => {
+        es.addEventListener('endpoint', (event: any) => {
+          console.log(`Received endpoint: ${event.data}`);
+          resolve(event.data);
+        });
+        
+        es.onerror = (error: any) => {
+          console.error('SSE connection error:', error);
+          reject(error);
+        };
+        
+        // Set a timeout for connection attempt
+        setTimeout(() => {
+          console.error('Timed out waiting for endpoint event');
+          reject(new Error('Timeout waiting for endpoint event'));
+        }, 5000);
       });
       
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
+      // 3. Initialize the connection following MCP protocol
+      console.log(`Initializing connection to ${messagesEndpoint}`);
+      const initResponse = await fetch(`${this.baseUrl}${messagesEndpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 0,
+          method: 'initialize',
+          params: {
+            protocolVersion: '2024-11-05',
+            capabilities: {
+              sampling: {},
+              roots: { listChanged: true }
+            },
+            clientInfo: {
+              name: 'systems-thinking-test',
+              version: '0.0.1'
+            }
+          }
+        })
+      });
       
-      const data = await response.json();
-      this.onMessage?.(data);
+      const initResult = await initResponse.json();
+      console.log('Initialization result:', initResult);
+      
+      // 4. Send the query about systems thinking topics
+      console.log('Sending query about systems thinking, cognitive neuroscience, and problem-solving strategies');
+      const queryResponse = await fetch(`${this.baseUrl}${messagesEndpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          method: 'executeToolCall',
+          params: {
+            toolCall: {
+              id: 'query-1',
+              name: 'query',
+              parameters: {
+                prompt: `Explain systems thinking, cognitive neuroscience, and problem-solving strategies.`
+              }
+            }
+          }
+        })
+      });
+      
+      const queryResult = await queryResponse.json();
+      console.log('Query result:', queryResult);
+      
+      // 5. Listen for additional messages from the server
+      es.addEventListener('message', (event: any) => {
+        console.log('Received message:', event.data);
+        try {
+          const data = JSON.parse(event.data);
+          console.log('Parsed message:', data);
+        } catch (error) {
+          console.error('Failed to parse message as JSON:', error);
+        }
+      });
+      
+      // Wait for asynchronous messages
+      console.log('Waiting for response stream (30 seconds)...');
+      await new Promise(resolve => setTimeout(resolve, 30000));
+      
+      // 6. Close the connection
+      es.close();
+      console.log('Test completed');
     } catch (error) {
-      console.error('Transport error:', error);
-      this.onError?.(error instanceof Error ? error : new Error(String(error)));
+      console.error('Error:', error);
     }
-  }
-
-  onMessage?: (message: any) => void;
-  onError?: (error: Error) => void;
-
-  async close(): Promise<void> {
-    // No persistent connection to close with HTTP
-    console.log('HTTP transport closed');
-    this.isStarted = false;
   }
 }
 
-async function testMcpConnection() {
-  // Get MCP configuration from environment variables
-  const mcpHost = process.env.MCP_HOST || '127.0.0.1';
-  const mcpPort = parseInt(process.env.MCP_PORT || '5001', 10);
-  
-  const client = new McpClient({
-    name: "mcp-dust-client",
-    version: "1.0.0",
-    requestTimeout: 30000 // 30 seconds timeout to match server config
-  });
-  
-  // Create a custom transport to communicate with the running server
-  console.log(`Connecting to MCP server at ${mcpHost}:${mcpPort}`);
-  const transport = new HttpTransport(`http://${mcpHost}:${mcpPort}`);
-
-  try {
-    // Connection sequence
-    await client.connect(transport);
-    console.log("🔌 Connected to MCP server");
-
-    // Test valid query
-    console.log("🚀 Sending valid query...");
-    const validResponse = await client.callTool({
-      name: "dust-query", 
-      arguments: {
-        query: TEST_CONFIG.testMessage
-      }
-    });
-
-    const validResult = SuccessResponseSchema.safeParse(validResponse);
-    if (validResult.success) {
-      console.log("✅ Valid query test passed");
-      console.log("📦 Response payload:", validResult.data);
-    } else {
-      console.error("❌ Valid query test failed:", validResult.error);
-    }
-
-    // Test invalid query
-    console.log("🚨 Sending invalid query...");
-    const invalidResponse = await client.callTool({
-      name: "dust-query", 
-      arguments: {
-        query: TEST_CONFIG.invalidMessage
-      }
-    });
-
-    const invalidResult = ErrorResponseSchema.safeParse(invalidResponse);
-    if (invalidResult.success && invalidResponse.isError) {
-      console.log("✅ Invalid query test passed");
-      console.log("📦 Error response:", invalidResult.data);
-    } else {
-      console.error("❌ Invalid query test failed");
-    }
-
-  } catch (error) {
-    console.error("💥 Connection failed:", error instanceof Error ? error.message : error);
-  } finally {
-    // Close the connection via transport
-    transport.close();
-  }
-}
-
-// Run test with Node.js test runner
-test('MCP Dust Server Tools', async () => {
-  for (let attempt = 1; attempt <= TEST_CONFIG.maxRetries; attempt++) {
-    try {
-      console.log(`🔁 Test attempt ${attempt}/${TEST_CONFIG.maxRetries}`);
-      await testMcpConnection();
-      break;
-    } catch (error) {
-      console.error(`Error in attempt ${attempt}:`, error);
-      if (attempt === TEST_CONFIG.maxRetries) {
-        throw new Error("All test attempts failed");
-      }
-      await setTimeout(TEST_CONFIG.retryDelay);
-    }
-  }
-});
+// Run the test
+const test = new SystemsThinkingMCPTest();
+test.runTest();
