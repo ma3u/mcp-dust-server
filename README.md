@@ -73,7 +73,7 @@ To integrate the Dust MCP Server with Windsurf IDE, update the configuration fil
       "command": "npx",
       "args": [
         "ts-node",
-        "/path/to/your/mcp-dust-server/src/server.ts"
+        "src/server.ts"
       ],
       "env": {
         "MCP_HOST": "127.0.0.1",
@@ -98,12 +98,10 @@ To integrate the Dust MCP Server with Claude Desktop, update its configuration f
 {
   "mcpServers": {
     "dust-agent": {
-      "command": "npm",
+      "command": "npx",
       "args": [
-        "run",
-        "start",
-        "--prefix",
-        "/path/to/your/mcp-dust-server"
+        "ts-node",
+        "mcp-dust-server/src/server.ts"
       ],
       "host": "127.0.0.1",
       "port": 5001,

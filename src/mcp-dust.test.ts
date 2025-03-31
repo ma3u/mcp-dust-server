@@ -1,6 +1,6 @@
 import { config } from 'dotenv';
 import fetch from 'node-fetch';
-import * as EventSource from 'eventsource';
+import EventSource from 'eventsource';
 
 // Load environment variables
 config();
