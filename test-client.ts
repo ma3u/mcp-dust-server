@@ -12,10 +12,11 @@ const TEST_CONFIG = {
   invalidMessage: ""
 };
 
-// Create a client
+// Create a client with increased timeout for AI responses
 const client = new McpClient({
   name: "mcp-dust-client",
-  version: "1.0.0"
+  version: "1.0.0",
+  requestTimeout: 120000 // 2 minutes timeout for AI responses
 });
 
 // Create a transport that will spawn a process to connect to
@@ -45,10 +46,14 @@ async function main() {
     console.log("\n🚀 Testing dust-query tool...");
     console.log("📤 Query:", TEST_CONFIG.testMessage);
     
+    console.log("⏳ Waiting for response (may take up to 2 minutes)...");
     const queryResponse = await client.callTool({
       name: "dust-query",
       arguments: {
         query: TEST_CONFIG.testMessage
+      },
+      _meta: {
+        requestTimeout: 120000 // 2 minutes timeout specifically for this request
       }
     });
     
