@@ -1,0 +1,63 @@
+### Architecture Analysis:
+- Need to bridge MCP protocol with Dust API while maintaining state[1][2]
+- SSE required for real-time updates[9]
+Context preservation needs session management[6]
+
+## Security Considerations:
+- API key masking in logs[10][11]
+- Input validation for file uploads[12]
+- Session isolation requirements[4]
+
+## Dust Integration:
+- Analyze Dust SDK patterns[2]
+- Agent configuration requirements[7]
+- Stream handling best practices[9]
+
+## Protocol Mapping:
+- MCP tools ↔ Dust agent capabilities[1][3]
+- Resource management for files[6]
+- Error handling across systems[5]
+
+## Performance Aspects:
+- SSE connection management[9]
+- Conversation context caching
+- Timeout handling[4]
+
+### Key Technical Decisions:
+
+1. **Session Management**:
+- UUID-based session isolation[6]
+- Context preserved in encrypted Map store
+- Automatic cleanup after timeout[4]
+
+2. **Streaming Architecture**:
+- SSE for real-time updates[9]
+- Chunked response handling[2]
+- Event type differentiation[1]
+
+3. **Security Implementation**:
+- Regex-based log masking[11]
+- Input schema validation[12]
+- Secure resource access control[4]
+
+4. **Dust Integration**:
+- Official SDK usage[2]
+- Context-aware agent prompting[7]
+- Error propagation handling[5]
+
+
+[1] https://github.com/modelcontextprotocol/typescript-sdk
+[2] https://github.com/dust-tt/dust-sdk-js
+[3] https://modelcontextprotocol.io/quickstart/user
+[4] https://eprint.iacr.org/2018/438.pdf
+[5] https://mcp.so/server/mcp-server-test/sterashima78
+[6] https://glama.ai/mcp/servers/3jsu6wpgzt/blob/main/src/index.ts
+[7] https://dust.tt
+[8] https://dev.to/suzuki0430/the-easiest-way-to-set-up-mcp-with-claude-desktop-and-docker-desktop-5o
+[9] https://dev.to/manojspace/real-time-log-streaming-with-nodejs-and-react-using-server-sent-events-sse-48pk
+[10] https://stackoverflow.com/questions/1466905/hiding-sensitive-confidential-information-in-log-files
+[11] https://github.com/trentm/node-bunyan/issues/591
+[12] https://cheatsheetseries.owasp.org/cheatsheets/Cross_Site_Scripting_Prevention_Cheat_Sheet.html
+[13] https://mcp.so/server/mcp-test-client/crazyrabbitLTC
+[14] https://github.com/modelcontextprotocol
+[15] https://github.com/dust-tt/dust

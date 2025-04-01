@@ -1,20 +1,26 @@
 {
   "name": "mcp-dust-server",
   "version": "1.0.0",
-  "main": "index.js",
+  "type": "module",
+  "main": "dist/server.js",
   "scripts": {
     "build": "tsc",
-    "test": "npm run build && node --test dist/mcp-dust.test.js"
+    "start": "node dist/server.js",
+    "dev": "ts-node --esm src/server.ts",
+    "test": "npm run build && node --test dist/mcp-dust.test.js",
+    "lint": "eslint src/**/*.ts"
   },
-  "keywords": [],
+  "keywords": ["mcp", "dust", "ai"],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "MCP Bridge Server for Dust AI integration",
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.8.0",
     "@tsconfig/node23": "^23.0.1",
     "@types/eventsource": "^1.1.15",
+    "@types/express": "^4.17.21",
     "@types/node": "^22.13.14",
+    "eslint": "^8.57.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2",
     "zod": "^3.24.2"
@@ -23,6 +29,8 @@
     "@dust-tt/client": "^1.0.32",
     "dotenv": "^16.4.7",
     "eventsource": "^3.0.6",
+    "express": "^4.18.3",
+    "express-rate-limit": "^7.2.0",
     "node-fetch": "^3.3.2"
   }
 }

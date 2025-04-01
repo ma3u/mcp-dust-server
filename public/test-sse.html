@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MCP Dust Server SSE Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .connection-status {
+            padding: 8px 12px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+        .connected {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .pending {
+            background-color: #fff3cd;
+            color: #856404;
+        }
+        h1 {
+            color: #2c3e50;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        textarea {
+            width: 100%;
+            padding: 12px 20px;
+            margin: 8px 0;
+            box-sizing: border-box;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            resize: vertical;
+            min-height: 100px;
+        }
+        #log {
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 4px;
+            height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+        }
+        .message {
+            margin-bottom: 5px;
+            padding: 5px;
+            border-bottom: 1px solid #eee;
+        }
+        .timestamp {
+            color: #6c757d;
+            font-size: 0.8em;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>MCP Dust Server SSE Test</h1>
+        
+        <div class="card">
+            <h2>SSE Connection</h2>
+            <div id="status" class="connection-status disconnected">Disconnected</div>
+            <button id="connect">Connect to SSE</button>
+            <button id="disconnect" disabled>Disconnect</button>
+        </div>
+        
+        <div class="card">
+            <h2>Echo Message Test</h2>
+            <textarea id="message" placeholder="Enter message to echo"></textarea>
+            <button id="send" disabled>Send Echo Request</button>
+        </div>
+
+        <div class="card">
+            <h2>Dust Agent Query Test</h2>
+            <textarea id="query" placeholder="Enter query for Dust agent"></textarea>
+            <button id="sendQuery" disabled>Send Query</button>
+        </div>
+        
+        <div class="card">
+            <h2>Event Log</h2>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        let eventSource = null;
+        let sessionId = null;
+        let messageEndpoint = null;
+        let requestId = 0;
+        let autoReconnect = true; // Enable auto-reconnect by default
+
+        const statusEl = document.getElementById('status');
+        const connectBtn = document.getElementById('connect');
+        const disconnectBtn = document.getElementById('disconnect');
+        const messageInput = document.getElementById('message');
+        const sendBtn = document.getElementById('send');
+        const queryInput = document.getElementById('query');
+        const sendQueryBtn = document.getElementById('sendQuery');
+        const logEl = document.getElementById('log');
+
+        function logMessage(message, isError = false) {
+            const now = new Date();
+            const timestamp = now.toLocaleTimeString();
+            const messageEl = document.createElement('div');
+            messageEl.classList.add('message');
+            if (isError) {
+                messageEl.style.color = '#dc3545';
+            }
+            messageEl.innerHTML = `<span class="timestamp">${timestamp}</span> ${message}`;
+            logEl.appendChild(messageEl);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        connectBtn.addEventListener('click', () => {
+            autoReconnect = true; // Re-enable auto-reconnect when manually connecting
+            connectSSE();
+        });
+
+        disconnectBtn.addEventListener('click', () => {
+            autoReconnect = false; // Disable auto-reconnect when manually disconnecting
+            disconnectSSE();
+        });
+        
+        // Auto-connect when the page loads
+        window.addEventListener('DOMContentLoaded', () => {
+            logMessage('Page loaded, automatically connecting to SSE...');
+            connectSSE();
+        });
+
+        sendBtn.addEventListener('click', () => {
+            sendEchoMessage();
+        });
+
+        sendQueryBtn.addEventListener('click', () => {
+            sendDustQuery();
+        });
+
+        function connectSSE() {
+            try {
+                // First disconnect if there's an existing connection
+                if (eventSource) {
+                    disconnectSSE();
+                }
+                
+                logMessage('Connecting to SSE...');
+                statusEl.classList.remove('disconnected', 'connected');
+                statusEl.classList.add('pending');
+                statusEl.textContent = 'Connecting...';
+                
+                // Reset session state
+                sessionId = null;
+                messageEndpoint = null;
+                
+                // Connect to the SSE endpoint
+                eventSource = new EventSource('/sse');
+                
+                // Handle the connection open event
+                eventSource.onopen = () => {
+                    logMessage('SSE connection established with server');
+                    // Session info will come in a separate event
+                };
+
+                // Handle connection errors
+                eventSource.onerror = (event) => {
+                    logMessage(`SSE connection error: ${event.type}`, true);
+                    disconnectSSE();
+                    
+                    // Auto reconnect after a short delay if enabled
+                    if (autoReconnect) {
+                        logMessage('Attempting to reconnect in 3 seconds...');
+                        setTimeout(() => {
+                            if (autoReconnect) { // Check again in case it was disabled during the timeout
+                                connectSSE();
+                            }
+                        }, 3000);
+                    }
+                };
+
+                eventSource.addEventListener('session', (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        sessionId = data.sessionId;
+                        messageEndpoint = data.messageEndpoint;
+                        logMessage(`Session established: ${sessionId}`);
+                        logMessage(`Message endpoint: ${messageEndpoint}`);
+                        
+                        // Enable buttons now that we have session info
+                        sendBtn.disabled = false;
+                        sendQueryBtn.disabled = false;
+                    } catch (error) {
+                        logMessage(`Error parsing session data: ${error.message}`, true);
+                    }
+                });
+
+                // Handle regular messages without event name
+                eventSource.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        logMessage(`Received message: ${JSON.stringify(data, null, 2)}`);
+                    } catch (error) {
+                        logMessage(`Error parsing message: ${error.message}`, true);
+                    }
+                };
+                
+                // Handle custom event types
+                eventSource.addEventListener('message', (event) => {
+                    try {
+                        const message = JSON.parse(event.data);
+                        logMessage(`Received 'message' event: ${JSON.stringify(message, null, 2)}`);
+                    } catch (error) {
+                        logMessage(`Error parsing message event: ${error.message}`, true);
+                    }
+                });
+            } catch (error) {
+                logMessage(`Error connecting to SSE: ${error.message}`, true);
+                disconnectSSE();
+            }
+        }
+
+        function disconnectSSE() {
+            if (eventSource) {
+                eventSource.close();
+                eventSource = null;
+            }
+            
+            sessionId = null;
+            messageEndpoint = null;
+            
+            statusEl.classList.remove('connected', 'pending');
+            statusEl.classList.add('disconnected');
+            statusEl.textContent = 'Disconnected';
+            
+            connectBtn.disabled = false;
+            disconnectBtn.disabled = true;
+            sendBtn.disabled = true;
+            sendQueryBtn.disabled = true;
+            
+            logMessage('Disconnected from SSE');
+        }
+
+        function sendEchoMessage() {
+            if (!sessionId || !messageEndpoint) {
+                logMessage('No active session', true);
+                return;
+            }
+            
+            const message = messageInput.value.trim();
+            if (!message) {
+                logMessage('Please enter a message', true);
+                return;
+            }
+            
+            const requestData = {
+                jsonrpc: '2.0',
+                method: 'run',
+                params: {
+                    tool: 'echo',
+                    args: {
+                        message: message
+                    }
+                },
+                id: `echo-${++requestId}`
+            };
+            
+            logMessage(`Sending echo request: ${JSON.stringify(requestData)}`);
+            
+            fetch(messageEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                logMessage(`Echo response: ${JSON.stringify(data)}`);
+            })
+            .catch(error => {
+                logMessage(`Error sending message: ${error.message}`, true);
+            });
+        }
+
+        function sendDustQuery() {
+            if (!sessionId || !messageEndpoint) {
+                logMessage('No active session', true);
+                return;
+            }
+            
+            const query = queryInput.value.trim();
+            if (!query) {
+                logMessage('Please enter a query', true);
+                return;
+            }
+            
+            const requestData = {
+                jsonrpc: '2.0',
+                method: 'run',
+                params: {
+                    tool: 'dust-query',
+                    args: {
+                        query: query
+                    }
+                },
+                id: `query-${++requestId}`
+            };
+            
+            logMessage(`Sending dust query: ${JSON.stringify(requestData)}`);
+            
+            fetch(messageEndpoint, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(requestData)
+            })
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                logMessage(`Query response: ${JSON.stringify(data)}`);
+            })
+            .catch(error => {
+                logMessage(`Error sending query: ${error.message}`, true);
+            });
+        }
+    </script>
+</body>
+</html>
