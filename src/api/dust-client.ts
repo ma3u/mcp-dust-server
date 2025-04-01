@@ -1,4 +1,7 @@
-// src/api/dust-client.ts
+// src/api/dust-client.ts is a module imported by server.ts
+// The main server logic is in server.ts which has the main() function that starts the server
+// To properly use dust-client.ts, environment variables are needed (DUST_WORKSPACE_ID, DUST_API_KEY, etc.)
+
 import { DustAPI } from "@dust-tt/client";
 import { logger } from "../utils/secure-logger.js";
 import * as dotenv from 'dotenv';
