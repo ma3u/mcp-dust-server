@@ -4,16 +4,16 @@
 
 ## Immediate Tasks
 
-- [ ] [P0] Initialize MCP server scaffolding (Owner: Core Team)
-- [ ] [P0] Configure Dust API client (Owner: AI Team)
-- [ ] [P0] Implement basic session management (Owner: Backend)
-- [ ] [P1] Set up SSE transport layer (Owner: Networking)
-- [ ] [P1] Create secret masking logger (Owner: Security)
+- [x] [P0] Initialize MCP server scaffolding (Owner: Core Team)
+- [x] [P0] Configure Dust API client (Owner: AI Team)
+- [x] [P0] Implement basic session management (Owner: Backend)
+- [x] [P1] Set up SSE transport layer (Owner: Networking)
+- [x] [P1] Create secret masking logger (Owner: Security)
 
 ## Core Features
 
 - [ ] [P0] Implement file upload resource (Owner: Storage)
-- [ ] [P0] Create stream parsing adapter (Owner: AI Team)
+- [x] [P0] Create stream parsing adapter (Owner: AI Team)
 - [ ] [P1] Add conversation history storage (Owner: Backend)
 - [ ] [P1] Develop context validation schema (Owner: Validation)
 
@@ -35,9 +35,9 @@
 
 ## Key Dependencies
 
-- [ ] MCP SDK v2.3+ (protocol compatibility)
-- [ ] Dust API stability
-- [ ] Node.js 20+ (ESM support)
+- [x] MCP SDK v2.3+ (protocol compatibility)
+- [x] Dust API stability
+- [x] Node.js 20+ (ESM support)
 - [ ] Redis 7+ for production sessions
 
 ## Risk Management

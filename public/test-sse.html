@@ -191,7 +191,7 @@
                 messageEndpoint = null;
                 
                 // Connect to the SSE endpoint
-                eventSource = new EventSource('/sse');
+                eventSource = new EventSource('http://127.0.0.1:5001/sse');
                 
                 // Handle the connection open event
                 eventSource.onopen = () => {

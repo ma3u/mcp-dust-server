@@ -63,18 +63,26 @@ async function main() {
     
     // Custom SSE endpoint implementation
     app.get('/sse', (req: express.Request, res: express.Response) => {
+      // Generate a unique session ID and endpoint path immediately
+      const sessionId = crypto.randomUUID();
+      const endpoint = `/message/${sessionId}`;
+      
       try {
-        // Generate a unique session ID and endpoint path
-        const sessionId = crypto.randomUUID();
-        const endpoint = `/message/${sessionId}`;
+        console.log('New SSE connection established');
         
-        // Setup SSE connection
-        // We'll handle the headers manually to avoid conflicts
-        res.setHeader('Content-Type', 'text/event-stream');
-        res.setHeader('Cache-Control', 'no-cache');
-        res.setHeader('Connection', 'keep-alive');
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.status(200);
+        // Check if headers have already been sent
+        if (res.headersSent) {
+          logger.error(`Headers already sent for session ${sessionId}`);
+          return;
+        }
+        
+        // Set SSE headers ONLY ONCE using writeHead
+        res.writeHead(200, {
+          'Content-Type': 'text/event-stream',
+          'Cache-Control': 'no-cache',
+          'Connection': 'keep-alive',
+          'Access-Control-Allow-Origin': '*'
+        });
         
         // First send a simple message that connection is established
         res.write(`data: ${JSON.stringify({ connected: true })}\n\n`);
@@ -90,14 +98,30 @@ async function main() {
         // We do this in a separate async function to avoid blocking
         (async () => {
           try {
+            // Check if the connection is still open before proceeding
+            if (res.writableEnded) {
+              logger.warn(`Connection ended before transport initialization for session ${sessionId}`);
+              return;
+            }
+            
             await transport.start();
             await mcpServer.connect(transport);
             
-            // Now send session info to the client
-            res.write(`event: session\ndata: ${JSON.stringify({ sessionId, messageEndpoint: endpoint })}\n\n`);
-            logger.info(`New SSE session established: ${sessionId}`);
+            // Check again if connection is still open before writing
+            if (!res.writableEnded) {
+              // Now send session info to the client
+              res.write(`event: session\ndata: ${JSON.stringify({ sessionId, messageEndpoint: endpoint })}\n\n`);
+              logger.info(`New SSE session established: ${sessionId}`);
+            }
           } catch (error) {
             logger.error(`Error initializing transport for session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+            
+            // If we encounter an error during initialization and the connection is still open
+            // but we haven't sent any data yet, we can close the connection
+            if (!res.writableEnded) {
+              // Don't try to set headers here, just end the connection if possible
+              res.end(`event: error\ndata: ${JSON.stringify({ error: "Failed to initialize connection" })}\n\n`);
+            }
           }
         })();
         
@@ -134,10 +158,27 @@ async function main() {
         });
       } catch (error) {
         logger.error(`Error in SSE handler: ${error instanceof Error ? error.message : String(error)}`);
+        
+        // Only attempt to send headers if they haven't been sent yet
         if (!res.headersSent) {
-          res.status(500).send('Internal Server Error');
-        } else if (!res.writableEnded) {
+          // For SSE clients, respond with an SSE-formatted error instead of regular HTTP response
+          res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*'
+          });
+          res.write(`event: error\ndata: ${JSON.stringify({ error: "Internal Server Error" })}\n\n`);
           res.end();
+        } else if (!res.writableEnded) {
+          // If headers sent but connection still open, just send error and end
+          res.write(`event: error\ndata: ${JSON.stringify({ error: "Internal Server Error" })}\n\n`);
+          res.end();
+        }
+        
+        // Make sure to clean up any session resources
+        if (sessionId && activeSessions.has(sessionId)) {
+          activeSessions.delete(sessionId);
         }
       }
     });
