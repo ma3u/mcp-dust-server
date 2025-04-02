@@ -192,6 +192,8 @@ To integrate the Dust MCP Server with Claude Desktop, update its configuration f
 
 The project includes a web-based test client accessible at `http://localhost:5002` (or your configured CLIENT_PORT) when you run the client component. This web interface allows you to:
 
+![alt text](image.png)
+
 1. Connect to the MCP server via SSE with automatic reconnection
 2. Send test echo messages to verify connectivity
 3. Send queries to your Dust agent and receive streaming responses
