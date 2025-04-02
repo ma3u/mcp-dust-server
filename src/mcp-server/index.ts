@@ -287,7 +287,23 @@ async function main() {
     });
 
     // Start the HTTP server with singleton enforcement
-    serverInstance = app.listen(port, host, () => {
+    // Create server instance first so we can add error handlers before starting
+    serverInstance = app.listen(port, host);
+    
+    // Add error handler for port conflicts
+    serverInstance.on('error', (error: Error) => {
+      if ((error as any).code === 'EADDRINUSE') {
+        logger.error(`Port ${port} is already in use. Another instance of the server may be running.`);
+        console.error(`Port ${port} is already in use. Another instance of the server may be running.`);
+        process.exit(1);
+      } else {
+        logger.error('Server error:', error);
+        console.error('Server error:', error);
+      }
+    });
+    
+    // Set up success handler
+    serverInstance.on('listening', () => {
       logger.info(`MCP Server running on http://${host}:${port}`);
       logger.info(`Server name: ${process.env.MCP_NAME || "Dust MCP Bridge"}`);
       logger.info(`Protocol version: 2024-11-05`);
@@ -301,11 +317,7 @@ async function main() {
       console.error('Server started on port 5001');
     });
     
-    // Add error handling for the server
-    serverInstance.on('error', (error: Error) => {
-      logger.error('Server error:', error);
-      console.error('Server error:', error);
-    });
+    // Error handler already added before server start
 
     // Set up Express handlers and process management
     if ((mcpServer as any).setupExpressHandlers) {

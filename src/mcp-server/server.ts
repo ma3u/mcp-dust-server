@@ -629,17 +629,15 @@ export const createMcpServer = () => {
   const setupExpressHandlers = (app: any, server: any) => {
     app.post('/stream', (req: any, res: any) => {
       try {
-        if (req.body.method === 'initialize') {
-          console.error('INIT REQ:', req.body);
+        if (req.body && req.body.method === 'initialize') {
+          console.error('INIT REQ:', JSON.stringify(req.body));
           
-          // Send immediate ack
-          res.writeHead(200, {
-            'Content-Type': 'application/json',
-            'Connection': 'keep-alive'
-          });
+          // Set proper headers for JSON response
+          res.setHeader('Content-Type', 'application/json');
+          res.setHeader('Connection', 'keep-alive');
           
-          // Full protocol response
-          const response = JSON.stringify({
+          // Create a valid JSON-RPC 2.0 response
+          const response = {
             jsonrpc: "2.0",
             result: {
               protocolVersion: "2024-11-05",
@@ -652,19 +650,29 @@ export const createMcpServer = () => {
                 sessionManagement: true
               }
             },
-            id: req.body.id
-          });
+            id: req.body.id || 0
+          };
           
-          console.error('INIT RES:', response);
-          return res.end(response);
+          // Log the response for debugging
+          console.error('INIT RES:', JSON.stringify(response));
+          
+          // Send the response as proper JSON - use end with stringified JSON to avoid express adding extra content
+          return res.end(JSON.stringify(response));
         }
       } catch (error) {
-        console.error('INIT ERROR:', error);
-        res.status(500).json({
+        // Log the error for debugging
+        console.error('INIT ERROR:', error instanceof Error ? error.stack : String(error));
+        
+        // Send a proper error response - use end with stringified JSON to avoid express adding extra content
+        const errorResponse = {
           jsonrpc: "2.0",
-          error: { code: -32603, message: "Internal server error" },
-          id: null
-        });
+          error: { 
+            code: -32603, 
+            message: "Internal server error: " + (error instanceof Error ? error.message : String(error)) 
+          },
+          id: req.body?.id || null
+        };
+        return res.status(500).end(JSON.stringify(errorResponse));
       }
     });
 
