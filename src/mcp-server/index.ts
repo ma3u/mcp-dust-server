@@ -105,42 +105,74 @@ async function main() {
     app.get('/sse', async (req, res) => {
       logger.info(`New SSE connection from ${req.ip}, session: ${req.mcpSessionId || 'none'}`);
       
-      // Set proper SSE headers
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Access-Control-Allow-Origin': '*'
-      });
-      
-      // Send initial connection message
-      res.write(`data: ${JSON.stringify({ connected: true, timestamp: new Date().toISOString() })}\n\n`);
-      
-      // Set up heartbeat to keep connection alive
-      const heartbeatInterval = setInterval(() => {
-        if (!res.writableEnded) {
-          res.write(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
-        } else {
+      try {
+        // Create transport first - let the SDK handle headers
+        const transport = new SSEServerTransport('/messages', res);
+        
+        // Connect to MCP server
+        await mcpServer.connect(transport);
+        
+        // Set up heartbeat to keep connection alive (after transport is connected)
+        const heartbeatInterval = setInterval(() => {
+          if (!res.writableEnded) {
+            // Use direct write for heartbeat to avoid conflicts with SDK
+            res.write(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
+          } else {
+            clearInterval(heartbeatInterval);
+          }
+        }, 30000); // Send heartbeat every 30 seconds
+        
+        // Handle client disconnect
+        req.on('close', () => {
           clearInterval(heartbeatInterval);
+          logger.info(`SSE connection closed from ${req.ip}, session: ${req.mcpSessionId || 'none'}`);
+        });
+      } catch (error) {
+        logger.error(`Error establishing SSE connection: ${error instanceof Error ? error.message : String(error)}`);
+        if (!res.headersSent) {
+          res.status(500).send('Error establishing SSE connection');
         }
-      }, 30000); // Send heartbeat every 30 seconds
-      
-      // Handle client disconnect
-      req.on('close', () => {
-        clearInterval(heartbeatInterval);
-        logger.info(`SSE connection closed from ${req.ip}, session: ${req.mcpSessionId || 'none'}`);
-      });
-      
-      // Create and connect transport
-      const transport = new SSEServerTransport('/messages', res);
-      await mcpServer.connect(transport);
+      }
     });
     
     // Configure HTTP Stream endpoint
     app.post('/stream', async (req, res) => {
-      logger.info(`New HTTP Stream connection from ${req.ip}, session: ${req.mcpSessionId || 'none'}`);
-      const transport = new HTTPStreamTransport('/stream', res, req.mcpSessionId);
-      await mcpServer.connect(transport);
+      try {
+        logger.info(`New HTTP Stream connection from ${req.ip}, session: ${req.mcpSessionId || 'none'}`);
+        
+        // Validate request body
+        if (!req.body || typeof req.body !== 'object') {
+          logger.warn(`Invalid request body: ${JSON.stringify(req.body)}`);
+          return res.status(400).json({
+            error: 'Invalid request format',
+            message: 'Request body must be a valid JSON object'
+          });
+        }
+        
+        // Create transport and connect
+        const transport = new HTTPStreamTransport('/stream', res, req.mcpSessionId);
+        
+        // Process the message if it exists in the request body
+        if (Object.keys(req.body).length > 0) {
+          logger.debug(`Processing message in request body: ${JSON.stringify(req.body)}`);
+          // Connect to MCP server first
+          await mcpServer.connect(transport);
+          
+          // Then process the message
+          await transport.processMessage(req.body);
+        } else {
+          // Just connect if no message to process
+          await mcpServer.connect(transport);
+        }
+      } catch (error) {
+        logger.error(`Error handling HTTP Stream request: ${error instanceof Error ? error.message : String(error)}`);
+        if (!res.headersSent) {
+          res.status(500).json({
+            error: 'Internal server error',
+            message: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
     });
     
     // Start the HTTP server

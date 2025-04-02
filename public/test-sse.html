@@ -127,6 +127,20 @@
         let messageEndpoint = null;
         let requestId = 0;
         let autoReconnect = true; // Enable auto-reconnect by default
+        
+        // Function to enable action buttons
+        function enableActionButtons() {
+            // Get references to the buttons
+            const echoButton = document.getElementById('send');
+            const queryButton = document.getElementById('sendQuery');
+            
+            // Enable the buttons
+            if (echoButton) echoButton.disabled = false;
+            if (queryButton) queryButton.disabled = false;
+            
+            // Log the action
+            logMessage('Action buttons enabled');
+        }
 
         const statusEl = document.getElementById('status');
         const connectBtn = document.getElementById('connect');
@@ -206,6 +220,9 @@
                     // Set message endpoint based on server URL
                     messageEndpoint = 'http://127.0.0.1:5001/stream';
                     logMessage(`Using message endpoint: ${messageEndpoint}`);
+                    
+                    // Enable action buttons once connection is established
+                    enableActionButtons();
                 };
 
                 // Handle connection errors
@@ -240,6 +257,9 @@
                             statusEl.classList.add('connected');
                             statusEl.textContent = 'Connected';
                             disconnectBtn.disabled = false;
+                            
+                            // Also enable action buttons if they're still disabled
+                            enableActionButtons();
                         }
                     } catch (error) {
                         console.warn('Error parsing heartbeat:', error);
@@ -266,6 +286,9 @@
                         statusEl.classList.add('connected');
                         statusEl.textContent = 'Connected';
                         disconnectBtn.disabled = false;
+                        
+                        // Enable action buttons when session is established
+                        enableActionButtons();
                     } catch (error) {
                         logMessage(`Error parsing session data: ${error.message}`, true);
                     }
@@ -385,16 +408,50 @@
             })
             .then(response => {
                 if (!response.ok) {
-                    throw new Error(`HTTP error ${response.status}`);
+                    throw new Error(`HTTP error ${response.status} - ${response.statusText}`);
                 }
-                return response.json();
+                return response.text();
             })
             .then(data => {
-                logMessage(`Echo response: ${JSON.stringify(data)}`);
+                if (!data) {
+                    logMessage('Received empty response');
+                    return;
+                }
+                
+                try {
+                    // Handle multiple JSON objects in the response (chunked streaming)
+                    const jsonLines = data.split('\n').filter(line => line.trim());
+                    
+                    if (jsonLines.length > 0) {
+                        // Process each JSON line
+                        jsonLines.forEach(line => {
+                            try {
+                                const jsonData = JSON.parse(line);
+                                logMessage(`Echo response: ${JSON.stringify(jsonData)}`);
+                            } catch (lineError) {
+                                logMessage(`Error parsing response line: ${lineError.message}`, true);
+                            }
+                        });
+                    } else {
+                        // Try to parse the entire response as a single JSON
+                        const jsonData = JSON.parse(data);
+                        logMessage(`Echo response: ${JSON.stringify(jsonData)}`);
+                    }
+                } catch (error) {
+                    // If parsing fails, just log the raw response
+                    logMessage(`Raw response: ${data}`);
+                }
             })
             .catch(error => {
                 console.error('Error sending message:', error);
-                logMessage(`Error sending message: ${error.message}`, true);
+                // More detailed error logging with full error information
+                const errorDetails = {
+                    message: error.message || 'Unknown error',
+                    status: error.status,
+                    statusText: error.statusText,
+                    stack: error.stack
+                };
+                logMessage(`Error sending message: ${JSON.stringify(errorDetails)}`, true);
             });
         }
 
@@ -439,16 +496,50 @@
             })
             .then(response => {
                 if (!response.ok) {
-                    throw new Error(`HTTP error ${response.status}`);
+                    throw new Error(`HTTP error ${response.status} - ${response.statusText}`);
                 }
-                return response.json();
+                return response.text();
             })
             .then(data => {
-                logMessage(`Query response: ${JSON.stringify(data)}`);
+                if (!data) {
+                    logMessage('Received empty response from Dust agent');
+                    return;
+                }
+                
+                try {
+                    // Handle multiple JSON objects in the response (chunked streaming)
+                    const jsonLines = data.split('\n').filter(line => line.trim());
+                    
+                    if (jsonLines.length > 0) {
+                        // Process each JSON line
+                        jsonLines.forEach(line => {
+                            try {
+                                const jsonData = JSON.parse(line);
+                                logMessage(`Query response: ${JSON.stringify(jsonData)}`);
+                            } catch (lineError) {
+                                logMessage(`Error parsing response line: ${lineError.message}`, true);
+                            }
+                        });
+                    } else {
+                        // Try to parse the entire response as a single JSON
+                        const jsonData = JSON.parse(data);
+                        logMessage(`Query response: ${JSON.stringify(jsonData)}`);
+                    }
+                } catch (error) {
+                    // If parsing fails, just log the raw response
+                    logMessage(`Raw response: ${data}`);
+                }
             })
             .catch(error => {
                 console.error('Error sending query:', error);
-                logMessage(`Error sending query: ${error.message}`, true);
+                // More detailed error logging with full error information
+                const errorDetails = {
+                    message: error.message || 'Unknown error',
+                    status: error.status,
+                    statusText: error.statusText,
+                    stack: error.stack
+                };
+                logMessage(`Error sending query: ${JSON.stringify(errorDetails)}`, true);
             });
         }
     </script>

@@ -1,7 +1,3 @@
-Below is the **updated README** with the necessary adaptations to include instructions for starting the MCP server and integrating it with Windsurf IDE and Claude Desktop.
-
----
-
 # MCP Dust Server
 
 This repository contains an implementation of a Model Context Protocol (MCP) server designed to interact with Dust agents. The server is separated into two main components: the MCP server (which handles Dust API interactions) and the MCP test client (which provides a web interface for testing).
