@@ -131,6 +131,27 @@ export class HTTPStreamTransport implements Transport {
   async processMessage(message: any): Promise<void> {
     if (!this.messageHandler) {
       logger.warn(`No message handler registered for HTTP Stream transport: ${this.path}`);
+      
+      // Special handling for initialize method even without a registered handler
+      if (message.method === 'initialize' && message.jsonrpc === '2.0' && message.id !== undefined) {
+        logger.info('Handling initialize method without registered handler');
+        
+        // Send a basic initialize response to prevent timeout
+        await this.send({
+          jsonrpc: '2.0',
+          result: {
+            protocolVersion: '2024-11-05',
+            serverInfo: {
+              name: process.env.MCP_NAME || "Dust MCP Bridge",
+              version: '1.0.0'
+            },
+            capabilities: {}
+          },
+          id: message.id
+        });
+        return;
+      }
+      
       return;
     }
     
@@ -144,6 +165,29 @@ export class HTTPStreamTransport implements Transport {
         // Add session ID to the message if available and not already present
         if (this.sessionId && !message.sessionId) {
           message.sessionId = this.sessionId;
+        }
+        
+        // Special handling for initialize method to ensure quick response
+        if (message.method === 'initialize') {
+          logger.info('Fast-tracking initialize method response');
+          
+          // Send initialize response immediately to prevent timeout
+          await this.send({
+            jsonrpc: '2.0',
+            result: {
+              protocolVersion: '2024-11-05',
+              serverInfo: {
+                name: process.env.MCP_NAME || "Dust MCP Bridge",
+                version: '1.0.0'
+              },
+              capabilities: {}
+            },
+            id: message.id
+          });
+          
+          // Still pass to handler for proper processing
+          await this.messageHandler(message);
+          return;
         }
       }
       

@@ -154,11 +154,13 @@ async function main() {
     // First, initialize the session
     try {
       const initResult = await sendJsonRpcRequest('initialize', {
-        // Add proper initialization parameters
-        clientName: 'test-client',
-        clientVersion: '1.0.0',
+        protocol_version: '2025-03-26',
+        client: {
+          name: 'test-client',
+          version: '1.0.0'
+        },
         capabilities: {
-          supportedMethods: ['initialize', 'message', 'terminate', 'run']
+          supported_methods: ['initialize', 'message', 'terminate', 'run']
         }
       }, 'init-1');
       logger.info(`Session initialized: ${JSON.stringify(initResult.result || 'No result')}`);

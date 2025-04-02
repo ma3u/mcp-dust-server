@@ -106,8 +106,47 @@ async function main() {
       logger.info(`New SSE connection from ${req.ip}, session: ${req.mcpSessionId || 'none'}`);
       
       try {
-        // Create transport first - let the SDK handle headers
+        // Set up SSE headers
+        res.setHeader('Content-Type', 'text/event-stream');
+        res.setHeader('Cache-Control', 'no-cache');
+        res.setHeader('Connection', 'keep-alive');
+        res.setHeader('X-Accel-Buffering', 'no'); // Disable buffering for Nginx
+        
+        // Create transport
         const transport = new SSEServerTransport('/messages', res);
+        
+        // Register a message handler for the transport
+        // We need to use a custom approach to intercept initialize messages
+        // @ts-ignore - Accessing internal property for direct message handling
+        transport.onMessage = async (message: any) => {
+          logger.debug(`SSE message received: ${JSON.stringify(message)}`);
+          
+          // Special handling for initialize method
+          if (message.method === 'initialize' && message.jsonrpc === '2.0' && message.id !== undefined) {
+            logger.info('Fast-tracking SSE initialize response');
+            
+            // Send initialize response immediately to prevent timeout
+            const response = {
+              jsonrpc: "2.0" as const,  // Use const assertion to match expected type
+              result: {
+                protocolVersion: '2024-11-05',
+                serverInfo: {
+                  name: process.env.MCP_NAME || "Dust MCP Bridge",
+                  version: '1.0.0'
+                },
+                capabilities: {}
+              },
+              id: message.id
+            };
+            
+            // Send response directly through transport
+            await transport.send(response);
+          }
+          
+          // Let the MCP server handle the message normally
+          // @ts-ignore - Accessing internal method for direct message processing
+          await (mcpServer as any)._onMessage(message);
+        };
         
         // Connect to MCP server
         await mcpServer.connect(transport);
@@ -120,7 +159,7 @@ async function main() {
           } else {
             clearInterval(heartbeatInterval);
           }
-        }, 30000); // Send heartbeat every 30 seconds
+        }, 15000); // Send heartbeat every 15 seconds (reduced from 30s)
         
         // Handle client disconnect
         req.on('close', () => {
@@ -228,11 +267,22 @@ async function main() {
       }
     });
     
+    // Set up global error handlers
+    process.on('uncaughtException', (err) => {
+      logger.error('Unhandled exception:', err);
+      // Keep the process running despite the error
+    });
+
+    process.on('unhandledRejection', (reason, promise) => {
+      logger.error('Unhandled rejection at:', promise, 'reason:', reason);
+      // Keep the process running despite the error
+    });
+
     // Start the HTTP server
-    app.listen(port, host, () => {
+    const server = app.listen(port, host, () => {
       logger.info(`MCP Server running on http://${host}:${port}`);
       logger.info(`Server name: ${process.env.MCP_NAME || "Dust MCP Bridge"}`);
-      logger.info(`Protocol version: 2025-03-26`);
+      logger.info(`Protocol version: 2024-11-05`);
       logger.info(`Transports: SSEServerTransport, HTTPStreamTransport`);
       logger.info(`Session management: Enabled`);
       logger.info(`Rate limiting: Enabled (100 requests per 15 minutes)`);
@@ -240,6 +290,11 @@ async function main() {
       logger.info(`Dust agent: ${process.env.DUST_AGENT_ID || "(not configured)"}`);
     });
     
+    // Add error handling for the server
+    server.on('error', (error) => {
+      logger.error('Server error:', error);
+    });
+
     // Handle server shutdown
     const shutdown = () => {
       logger.info("Shutting down MCP server...");

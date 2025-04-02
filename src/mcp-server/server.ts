@@ -13,11 +13,20 @@ dotenv.config();
 
 // Create an MCP server with secure request and response logging
 export const createMcpServer = () => {
+  // Log server configuration for debugging
+  logger.info('Server configuration:', {
+    port: process.env.MCP_PORT || 5001,
+    dustWorkspace: process.env.DUST_WORKSPACE_ID,
+    dustAgent: process.env.DUST_AGENT_ID
+  });
+
   const mcpServer = new McpServer({ 
     name: process.env.MCP_NAME || "Dust MCP Bridge", 
     version: "1.0.0",
+    protocolVersion: "2024-11-05",
     onRequest: (request: any) => {
       logger.logRequest(request);
+      logger.debug('Received message:', JSON.stringify(request));
       
       // Validate request based on method
       if (request.method === 'initialize') {
@@ -202,6 +211,88 @@ export const createMcpServer = () => {
 
   // Add more tools as needed
 
+  // Override the initialize method handler to ensure proper response
+  const originalHandleMessage = (mcpServer as any).handleMessage;
+  (mcpServer as any).handleMessage = async function(message: any, transport?: any) {
+    logger.debug(`Custom message handler received: ${JSON.stringify(message)}`);
+    
+    // Special handling for initialize method
+    if (message.method === 'initialize') {
+      logger.info('Handling initialize method');
+      
+      // Validate the initialize request
+      const validation = validateInitializeRequest(message);
+      if (!validation.success) {
+        logger.warn(`Invalid initialize request: ${JSON.stringify(validation.error?.errors)}`);
+        const errorResponse = {
+          jsonrpc: '2.0',
+          error: {
+            code: -32602,
+            message: 'Invalid params for initialize method'
+          },
+          id: message.id
+        };
+        
+        // If transport is provided, send the response directly
+        if (transport && typeof transport.send === 'function') {
+          await transport.send(errorResponse);
+        }
+        
+        return errorResponse;
+      }
+      
+      // Create a properly formatted initialize response according to MCP spec
+      const response = {
+        jsonrpc: '2.0',
+        result: {
+          protocolVersion: '2024-11-05',
+          serverInfo: {
+            name: process.env.MCP_NAME || "Dust MCP Bridge",
+            version: '1.0.0'
+          },
+          capabilities: {}
+        },
+        id: message.id
+      };
+      
+      // If transport is provided, send the response directly
+      if (transport && typeof transport.send === 'function') {
+        logger.info(`Sending initialize response directly via transport: ${JSON.stringify(response)}`);
+        await transport.send(response);
+      } else {
+        logger.warn('No transport provided for initialize response');
+      }
+      
+      return response;
+    }
+    
+    // For other methods, use the original handler
+    return originalHandleMessage.call(this, message, transport);
+  };
+
+  // Expose the internal connect method to handle direct message processing
+  const originalConnect = mcpServer.connect.bind(mcpServer);
+  mcpServer.connect = async function(transport: any) {
+    logger.info(`Connecting transport: ${transport.constructor.name}`);
+    
+    // Register a direct message handler for the transport
+    transport.onMessage = async (message: any) => {
+      logger.debug(`Direct message received from transport: ${JSON.stringify(message)}`);
+      
+      // Process the message through our custom handler
+      if (message.method === 'initialize') {
+        // For initialize, use our custom handler with the transport
+        await (this as any).handleMessage(message, transport);
+      } else {
+        // For other methods, let the SDK handle it
+        await (this as any)._onMessage(message);
+      }
+    };
+    
+    // Call the original connect method
+    return originalConnect(transport);
+  };
+  
   // Create a handler for HTTP Stream messages according to MCP specification
   const handleHttpStreamMessage = async (message: any, sessionId: string) => {
     try {
@@ -254,15 +345,17 @@ export const createMcpServer = () => {
         
         // Process the message based on its method
         if (message.method === 'initialize') {
-          // Handle initialize request
+          // Handle initialize request according to MCP spec
+          logger.info('HTTP Stream: Handling initialize method');
           return {
             jsonrpc: '2.0',
             result: {
-              protocol_version: '2025-03-26',
-              server: {
+              protocolVersion: '2024-11-05',
+              serverInfo: {
                 name: process.env.MCP_NAME || "Dust MCP Bridge",
                 version: '1.0.0'
-              }
+              },
+              capabilities: {}
             },
             id: message.id
           };
