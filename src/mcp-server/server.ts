@@ -625,6 +625,69 @@ export const createMcpServer = () => {
   // This is a custom extension to the McpServer class to handle HTTP Stream messages
   (mcpServer as any).handleHttpStreamMessage = handleHttpStreamMessage;
 
+  // Proper initialize handler with protocol validation
+  const setupExpressHandlers = (app: any, server: any) => {
+    app.post('/stream', (req: any, res: any) => {
+      try {
+        if (req.body.method === 'initialize') {
+          console.error('INIT REQ:', req.body);
+          
+          // Send immediate ack
+          res.writeHead(200, {
+            'Content-Type': 'application/json',
+            'Connection': 'keep-alive'
+          });
+          
+          // Full protocol response
+          const response = JSON.stringify({
+            jsonrpc: "2.0",
+            result: {
+              protocolVersion: "2024-11-05",
+              serverInfo: {
+                name: "dust-mcp-server",
+                version: "1.0.0"
+              },
+              capabilities: {
+                toolRegistry: true,
+                sessionManagement: true
+              }
+            },
+            id: req.body.id
+          });
+          
+          console.error('INIT RES:', response);
+          return res.end(response);
+        }
+      } catch (error) {
+        console.error('INIT ERROR:', error);
+        res.status(500).json({
+          jsonrpc: "2.0",
+          error: { code: -32603, message: "Internal server error" },
+          id: null
+        });
+      }
+    });
+
+    // Process management
+    process.on('SIGTERM', () => gracefulShutdown(server));
+    process.on('SIGINT', () => gracefulShutdown(server));
+
+    function gracefulShutdown(server: any) {
+      server.close(() => {
+        console.log('Server closed');
+        process.exit(0);
+      });
+
+      setTimeout(() => {
+        console.error('Force shutdown');
+        process.exit(1);
+      }, 5000);
+    }
+  };
+
+  // Expose the setup function
+  (mcpServer as any).setupExpressHandlers = setupExpressHandlers;
+
   return mcpServer;
 };
 

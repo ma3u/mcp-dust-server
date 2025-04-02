@@ -65,9 +65,17 @@ app.use(sessionActivityMiddleware());
 // Create the MCP server instance
 const mcpServer = createMcpServer();
 
+// Add singleton enforcement
+let serverInstance: any = null;
+
 // Start the server
 async function main() {
   try {
+    // Check if server is already running
+    if (serverInstance) {
+      logger.error('Server already running on port 5001');
+      return;
+    }
     // Use MCP configuration from .env
     const host = process.env.MCP_HOST || '0.0.0.0';
     const port = parseInt(process.env.MCP_PORT || '5001', 10);
@@ -278,8 +286,8 @@ async function main() {
       // Keep the process running despite the error
     });
 
-    // Start the HTTP server
-    const server = app.listen(port, host, () => {
+    // Start the HTTP server with singleton enforcement
+    serverInstance = app.listen(port, host, () => {
       logger.info(`MCP Server running on http://${host}:${port}`);
       logger.info(`Server name: ${process.env.MCP_NAME || "Dust MCP Bridge"}`);
       logger.info(`Protocol version: 2024-11-05`);
@@ -288,22 +296,42 @@ async function main() {
       logger.info(`Rate limiting: Enabled (100 requests per 15 minutes)`);
       logger.info(`Dust workspace: ${process.env.DUST_WORKSPACE_ID || "(not configured)"}`);
       logger.info(`Dust agent: ${process.env.DUST_AGENT_ID || "(not configured)"}`);
+      
+      // Log to console for Claude logs
+      console.error('Server started on port 5001');
     });
     
     // Add error handling for the server
-    server.on('error', (error) => {
+    serverInstance.on('error', (error: Error) => {
       logger.error('Server error:', error);
+      console.error('Server error:', error);
     });
 
-    // Handle server shutdown
-    const shutdown = () => {
-      logger.info("Shutting down MCP server...");
-      process.exit(0);
-    };
-    
-    // Register shutdown handlers
-    process.on('SIGINT', shutdown);
-    process.on('SIGTERM', shutdown);
+    // Set up Express handlers and process management
+    if ((mcpServer as any).setupExpressHandlers) {
+      (mcpServer as any).setupExpressHandlers(app, serverInstance);
+      logger.info('Express handlers and process management set up');
+    } else {
+      logger.warn('setupExpressHandlers not available, using fallback shutdown handlers');
+      
+      // Fallback graceful shutdown handler
+      const gracefulShutdown = () => {
+        logger.info("Shutting down MCP server...");
+        serverInstance.close(() => {
+          logger.info('Server closed');
+          process.exit(0);
+        });
+
+        setTimeout(() => {
+          logger.error('Force shutdown after timeout');
+          process.exit(1);
+        }, 5000);
+      };
+      
+      // Register shutdown handlers
+      process.on('SIGINT', gracefulShutdown);
+      process.on('SIGTERM', gracefulShutdown);
+    }
     
   } catch (error) {
     logger.error("Failed to start server:", error);
