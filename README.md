@@ -15,6 +15,7 @@ This repository contains an implementation of a Model Context Protocol (MCP) ser
 - Automatic reconnection for dropped connections
 - Comprehensive error handling and reporting
 - Support for the latest MCP specification (2025-03-26)
+- Status endpoints for monitoring and health checks
 
 ## Installation
 
@@ -129,6 +130,58 @@ MCP Test Client running on http://127.0.0.1:5002
 ```
 
 ---
+
+## API Endpoints
+
+The server provides several endpoints for monitoring and health checks:
+
+### Health Check Endpoints
+
+- **GET /health**: Returns the server's health status
+  ```json
+  {
+    "status": "healthy",
+    "version": "1.0.0",
+    "timestamp": "2025-04-02T16:34:16.989Z",
+    "component": "MCP Server",
+    "activeSessions": 0
+  }
+  ```
+
+- **GET /ready**: Indicates if the server is ready to accept connections
+  ```json
+  {
+    "status": "ready",
+    "version": "1.0.0",
+    "timestamp": "2025-04-02T16:34:16.989Z"
+  }
+  ```
+
+- **GET /live**: Indicates if the server is alive
+  ```json
+  {
+    "status": "alive",
+    "uptime": 123.45,
+    "timestamp": "2025-04-02T16:34:16.989Z"
+  }
+  ```
+
+- **GET /api/v1/status**: Returns operational status and configuration details
+  ```json
+  {
+    "status": "operational",
+    "version": "1.0.0",
+    "workspace": "11453f1c9e",
+    "agent": "8x9nuWdMnR",
+    "uptime": 123.45
+  }
+  ```
+
+### MCP Protocol Endpoints
+
+- **GET /sse**: Server-Sent Events endpoint for real-time streaming
+- **POST /stream**: HTTP Stream Transport endpoint according to MCP specification
+- **POST /messages**: JSON-RPC endpoint for non-streaming MCP messages
 
 ## Integration
 

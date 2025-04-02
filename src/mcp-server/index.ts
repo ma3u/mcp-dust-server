@@ -70,6 +70,15 @@ let serverInstance: any = null;
 
 // Start the server
 async function main() {
+  // Debug logging for MCP server initialization
+  console.error('MCP Server initialization starting');
+  console.error('Node path:', process.execPath);
+  console.error('NVM path:', process.env.NVM_DIR);
+  console.error('NODE_PATH:', process.env.NODE_PATH);
+  console.error('PATH:', process.env.PATH);
+  console.error('Dust API Key:', process.env.DUST_API_KEY ? '***' + process.env.DUST_API_KEY.slice(-4) : 'not set');
+  console.error('Dust Workspace ID:', process.env.DUST_WORKSPACE_ID || 'not set');
+  console.error('Dust Agent ID:', process.env.DUST_AGENT_ID || 'not set');
   try {
     // Check if server is already running
     if (serverInstance) {
@@ -106,6 +115,17 @@ async function main() {
         status: 'alive',
         uptime: process.uptime(),
         timestamp: new Date().toISOString()
+      });
+    });
+    
+    // Add route for API status endpoint
+    app.get('/api/v1/status', (req, res) => {
+      res.json({
+        status: 'operational',
+        version: process.env.npm_package_version,
+        workspace: process.env.DUST_WORKSPACE_ID,
+        agent: process.env.DUST_AGENT_ID,
+        uptime: process.uptime()
       });
     });
     
