@@ -1,0 +1,450 @@
+// src/utils/http-stream-transport.ts
+import express from 'express';
+import http from 'http';
+import crypto from 'crypto';
+import { logger } from './secure-logger.js';
+
+/**
+ * Interface for server transport
+ */
+export interface ServerTransport {
+  start(): Promise<void>;
+  stop(): Promise<void>;
+  onMessage(handler: (message: any) => Promise<void>): void;
+  send(message: any): Promise<void>;
+  close(): Promise<void>;
+}
+
+/**
+ * HTTP Stream Transport configuration options
+ */
+export interface HTTPStreamTransportOptions {
+  /** Port to listen on (default: 3000) */
+  port?: number;
+  /** Host to bind to (default: 0.0.0.0) */
+  host?: string;
+  /** Chunk encoding format (default: ndjson) */
+  chunkEncoding?: 'ndjson';
+  /** Session timeout in milliseconds (default: 30 minutes) */
+  sessionTimeout?: number;
+  /** Whether to allow client session termination (default: true) */
+  allowClientTermination?: boolean;
+  /** Custom session ID header name (default: Mcp-Session-Id) */
+  sessionIdHeader?: string;
+  /** Maximum message history size per session (default: 100) */
+  maxMessageHistorySize?: number;
+}
+
+/**
+ * Session data interface
+ */
+interface SessionData {
+  id: string;
+  createdAt: Date;
+  lastActivity: Date;
+  messageHistory: any[];
+  transport: any;
+}
+
+/**
+ * HTTP Stream Transport implementation for MCP
+ * Provides bidirectional streaming via chunked encoding with built-in session management
+ */
+export class HTTPStreamTransport implements ServerTransport {
+  private messageHandler: ((message: any) => Promise<void>) | null = null;
+  private app: express.Application;
+  private server: http.Server;
+  private sessions: Map<string, SessionData>;
+  private port: number;
+  private host: string;
+  private chunkEncoding: 'ndjson';
+  private sessionTimeout: number;
+  private allowClientTermination: boolean;
+  private sessionIdHeader: string;
+  private maxMessageHistorySize: number;
+
+  private cleanupInterval: NodeJS.Timeout | null = null;
+
+  constructor(options: HTTPStreamTransportOptions = {}) {
+    this.app = express();
+    this.server = http.createServer(this.app);
+    this.sessions = new Map<string, SessionData>();
+
+    
+    // Initialize configuration
+    this.port = options.port || 3000;
+    this.host = options.host || '0.0.0.0';
+    this.chunkEncoding = options.chunkEncoding || 'ndjson';
+    this.sessionTimeout = options.sessionTimeout || 30 * 60 * 1000; // 30 minutes
+    this.allowClientTermination = options.allowClientTermination !== false;
+    this.sessionIdHeader = options.sessionIdHeader || 'Mcp-Session-Id';
+    this.maxMessageHistorySize = options.maxMessageHistorySize || 100;
+    
+    // Configure Express middleware
+    this.configureMiddleware();
+    
+    // Set up routes
+    this.setupRoutes();
+    
+    // Start session cleanup job
+    this.startCleanupJob();
+  }
+
+  /**
+   * Configure Express middleware
+   */
+  private configureMiddleware(): void {
+    // Parse JSON requests
+    this.app.use(express.json());
+    
+    // Basic security headers
+    this.app.use((req, res, next) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff');
+      res.setHeader('X-Frame-Options', 'DENY');
+      res.setHeader('X-XSS-Protection', '1; mode=block');
+      res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+      next();
+    });
+    
+    // Configure CORS
+    this.app.use((req, res, next) => {
+      res.setHeader('Access-Control-Allow-Origin', '*');
+      res.setHeader('Access-Control-Allow-Methods', 'GET, POST, DELETE, OPTIONS');
+      res.setHeader('Access-Control-Allow-Headers', `Content-Type, ${this.sessionIdHeader}, Last-Event-ID`);
+      if (req.method === 'OPTIONS') {
+        return res.status(200).end();
+      }
+      next();
+    });
+  }
+
+  /**
+   * Set up HTTP routes
+   */
+  private setupRoutes(): void {
+    // Health check endpoint
+    this.app.get('/health', (req, res) => {
+      res.json({
+        status: 'healthy',
+        version: '1.0.0',
+        transport: 'http-stream',
+        encoding: this.chunkEncoding,
+        timestamp: new Date().toISOString()
+      });
+    });
+    
+    // MCP endpoint - handles both session initialization and message streaming
+    this.app.post('/mcp', async (req, res) => {
+      try {
+        // Check for existing session ID in header
+        const sessionId = req.header(this.sessionIdHeader);
+        
+        if (sessionId) {
+          // Existing session
+          await this.handleExistingSession(sessionId, req, res);
+        } else {
+          // New session initialization
+          await this.handleNewSession(req, res);
+        }
+      } catch (error) {
+        logger.error(`Error in MCP endpoint: ${error instanceof Error ? error.message : String(error)}`);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Internal Server Error' });
+        }
+      }
+    });
+    
+    // Session termination endpoint
+    this.app.delete('/mcp', (req, res) => {
+      if (!this.allowClientTermination) {
+        return res.status(405).json({ error: 'Method Not Allowed' });
+      }
+      
+      const sessionId = req.header(this.sessionIdHeader);
+      if (!sessionId) {
+        return res.status(400).json({ error: 'Missing session ID' });
+      }
+      
+      if (!this.sessions.has(sessionId)) {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+      
+      // Delete the session
+      this.sessions.delete(sessionId);
+      logger.info(`Session terminated by client: ${sessionId}`);
+      
+      return res.status(204).end();
+    });
+  }
+
+  /**
+   * Handle a request for an existing session
+   */
+  private async handleExistingSession(sessionId: string, req: express.Request, res: express.Response): Promise<void> {
+    // Check if session exists
+    if (!this.sessions.has(sessionId)) {
+      logger.warn(`Request with unknown session ID: ${sessionId}`);
+      return res.status(404).json({ error: 'Session not found' });
+    }
+    
+    // Get session data
+    const session = this.sessions.get(sessionId)!;
+    
+    // Update last activity
+    session.lastActivity = new Date();
+    
+    // Process the message
+    try {
+      const message = req.body;
+      
+      // Check for Last-Event-ID header for resuming
+      const lastEventId = req.header('Last-Event-ID');
+      
+      // Set up streaming response
+      res.writeHead(200, {
+        'Content-Type': 'application/x-ndjson',
+        [this.sessionIdHeader]: sessionId
+      });
+      
+      // Add message to history
+      if (session.messageHistory.length >= this.maxMessageHistorySize) {
+        session.messageHistory.shift(); // Remove oldest message
+      }
+      session.messageHistory.push(message);
+      
+      // Set up transport for this request
+      session.transport = {
+        send: async (response: any) => {
+          try {
+            if (res.writableEnded) return;
+            
+            // Format as NDJSON
+            const chunk = JSON.stringify(response) + '\n';
+            res.write(chunk);
+            
+            // Add to message history
+            if (session.messageHistory.length >= this.maxMessageHistorySize) {
+              session.messageHistory.shift();
+            }
+            session.messageHistory.push(response);
+          } catch (error) {
+            logger.error(`Error sending response: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+      };
+      
+      // If resuming, send missed messages
+      if (lastEventId) {
+        const lastEventIndex = session.messageHistory.findIndex((msg: any) => msg.id === lastEventId);
+        if (lastEventIndex !== -1) {
+          const missedMessages = session.messageHistory.slice(lastEventIndex + 1);
+          for (const missedMessage of missedMessages) {
+            await session.transport.send(missedMessage);
+          }
+        }
+      }
+      
+      // Process the message
+      if (this.messageHandler) {
+        await this.messageHandler(message);
+      } else {
+        logger.warn('No message handler registered');
+        res.end();
+      }
+    } catch (error) {
+      logger.error(`Error processing message: ${error instanceof Error ? error.message : String(error)}`);
+      if (!res.writableEnded) {
+        res.write(JSON.stringify({ error: 'Error processing message' }) + '\n');
+        res.end();
+      }
+    }
+  }
+
+  /**
+   * Handle a request for a new session
+   */
+  private async handleNewSession(req: express.Request, res: express.Response): Promise<void> {
+    // Generate a new session ID
+    const sessionId = crypto.randomUUID();
+    
+    // Create session data
+    const session: SessionData = {
+      id: sessionId,
+      createdAt: new Date(),
+      lastActivity: new Date(),
+      messageHistory: [],
+      transport: null
+    };
+    
+    // Store the session
+    this.sessions.set(sessionId, session);
+    logger.info(`New session created: ${sessionId}`);
+    
+    // Set up streaming response
+    res.writeHead(200, {
+      'Content-Type': 'application/x-ndjson',
+      [this.sessionIdHeader]: sessionId
+    });
+    
+    // Set up transport for this request
+    session.transport = {
+      send: async (response: any) => {
+        try {
+          if (res.writableEnded) return;
+          
+          // Format as NDJSON
+          const chunk = JSON.stringify(response) + '\n';
+          res.write(chunk);
+          
+          // Add to message history
+          if (session.messageHistory.length >= this.maxMessageHistorySize) {
+            session.messageHistory.shift();
+          }
+          session.messageHistory.push(response);
+        } catch (error) {
+          logger.error(`Error sending response: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    };
+    
+    // Process the initial message if provided
+    try {
+      const message = req.body;
+      
+      // Add message to history
+      session.messageHistory.push(message);
+      
+      // Process the message
+      if (this.messageHandler) {
+        await this.messageHandler(message);
+      } else {
+        logger.warn('No message handler registered');
+        res.end();
+      }
+    } catch (error) {
+      logger.error(`Error processing initial message: ${error instanceof Error ? error.message : String(error)}`);
+      if (!res.writableEnded) {
+        res.write(JSON.stringify({ error: 'Error processing message' }) + '\n');
+        res.end();
+      }
+    }
+  }
+
+  /**
+   * Start the HTTP server
+   */
+  async start(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      try {
+        this.server.listen(this.port, this.host, () => {
+          logger.info(`HTTP Stream Transport started on ${this.host}:${this.port}`);
+          resolve();
+        });
+      } catch (error) {
+        reject(error);
+      }
+    });
+  }
+
+  /**
+   * Stop the HTTP server
+   */
+  async stop(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if (this.cleanupInterval) {
+        clearInterval(this.cleanupInterval);
+        this.cleanupInterval = null;
+      }
+      
+      this.server.close((err) => {
+        if (err) {
+          reject(err);
+        } else {
+          resolve();
+        }
+      });
+    });
+  }
+
+  /**
+   * Register a message handler
+   */
+  onMessage(handler: (message: any) => Promise<void>): void {
+    this.messageHandler = handler;
+  }
+
+  /**
+   * Send a message to all active sessions
+   */
+  async broadcast(message: any): Promise<void> {
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (session.transport) {
+        try {
+          await session.transport.send(message);
+        } catch (error) {
+          logger.error(`Error broadcasting to session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    }
+  }
+  
+  /**
+   * Send a message to a specific session
+   */
+  async send(message: any): Promise<void> {
+    // Find an active session to send to
+    for (const [sessionId, session] of this.sessions.entries()) {
+      if (session.transport) {
+        try {
+          await session.transport.send(message);
+          return;
+        } catch (error) {
+          logger.error(`Error sending to session ${sessionId}: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      }
+    }
+    
+    logger.warn('No active session found to send message');
+  }
+  
+  /**
+   * Close the transport
+   */
+  async close(): Promise<void> {
+    await this.stop();
+  }
+
+  /**
+   * Start the session cleanup job
+   */
+  private startCleanupJob(): void {
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupExpiredSessions();
+    }, 5 * 60 * 1000); // Run every 5 minutes
+  }
+
+  /**
+   * Clean up expired sessions
+   */
+  private cleanupExpiredSessions(): void {
+    const now = Date.now();
+    const expiredSessionIds: string[] = [];
+    
+    // Find expired sessions
+    for (const [sessionId, session] of this.sessions.entries()) {
+      const lastActivity = session.lastActivity.getTime();
+      if (now - lastActivity > this.sessionTimeout) {
+        expiredSessionIds.push(sessionId);
+      }
+    }
+    
+    // Remove expired sessions
+    for (const sessionId of expiredSessionIds) {
+      this.sessions.delete(sessionId);
+    }
+    
+    if (expiredSessionIds.length > 0) {
+      logger.info(`Cleaned up ${expiredSessionIds.length} expired sessions`);
+    }
+  }
+}

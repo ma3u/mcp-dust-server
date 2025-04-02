@@ -1,15 +1,12 @@
 // src/mcp-server/server.ts
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
-import crypto from 'crypto';
 import { z } from "zod";
 import * as dotenv from 'dotenv';
 import { dustClient, DustClient } from "../api/dust-client.js";
 import { logger } from "../utils/secure-logger.js";
-import { sessionManager } from "../utils/session-manager.js";
-import http from 'http';
-import express from 'express';
-import path from 'path';
+import { conversationHistory, ConversationMessage } from "../utils/conversation-history.js";
+import { validateMessageRequest, validateInitializeRequest, validateTerminateRequest } from "../schemas/context-validation.js";
+import crypto from 'crypto';
 
 // Load environment variables
 dotenv.config();
@@ -21,9 +18,61 @@ export const createMcpServer = () => {
     version: "1.0.0",
     onRequest: (request: any) => {
       logger.logRequest(request);
+      
+      // Validate request based on method
+      if (request.method === 'initialize') {
+        const validation = validateInitializeRequest(request);
+        if (!validation.success) {
+          logger.warn(`Invalid initialize request: ${JSON.stringify(validation.error.errors)}`);
+        }
+      } else if (request.method === 'message') {
+        const validation = validateMessageRequest(request);
+        if (!validation.success) {
+          logger.warn(`Invalid message request: ${JSON.stringify(validation.error.errors)}`);
+        } else {
+          // Add message to conversation history
+          const message = request.params.message;
+          const sessionId = request.sessionId || 'unknown';
+          
+          conversationHistory.addMessage({
+            id: crypto.randomUUID(),
+            sessionId,
+            role: message.role,
+            content: message.content ? JSON.stringify(message.content) : '',
+            timestamp: new Date(),
+            toolCalls: message.tool_calls,
+            metadata: {
+              requestId: request.id
+            }
+          });
+        }
+      } else if (request.method === 'terminate') {
+        const validation = validateTerminateRequest(request);
+        if (!validation.success) {
+          logger.warn(`Invalid terminate request: ${JSON.stringify(validation.error.errors)}`);
+        }
+      }
     },
     onResponse: (response: any) => {
       logger.logResponse(response);
+      
+      // Add assistant responses to conversation history
+      if (response.result?.message) {
+        const message = response.result.message;
+        const sessionId = response.sessionId || 'unknown';
+        
+        conversationHistory.addMessage({
+          id: crypto.randomUUID(),
+          sessionId,
+          role: message.role,
+          content: message.content ? JSON.stringify(message.content) : '',
+          timestamp: new Date(),
+          toolResults: message.tool_results,
+          metadata: {
+            responseId: response.id
+          }
+        });
+      }
     },
     onError: (error: Error) => {
       logger.error("MCP ERROR:", error.message, error.stack);
@@ -31,26 +80,18 @@ export const createMcpServer = () => {
   });
 
   // Register the echo tool for testing
-  mcpServer.tool("echo", "Echoes back the provided message", {
+  mcpServer.tool("echo", { 
     message: z.string().describe("Message to echo back")
-  }, async (args) => {
-    logger.info(`Received echo message: ${args.message}`);
-    
-    // Create a new session for this conversation
-    const session = sessionManager.createSession({
-      toolName: "echo",
-      message: args.message,
-      timestamp: new Date()
-    });
-    
-    return { content: [{ type: "text", text: `Echo: ${args.message} (Session ID: ${session.id})` }] };
+  }, async ({ message }) => {
+    logger.info(`Received echo message: ${message}`);
+    return { content: [{ type: "text", text: `Echo: ${message}` }] };
   });
 
   // Query Dust AI agent
-  mcpServer.tool("dust-query", "Send a query to your Dust AI agent", {
+  mcpServer.tool("dust-query", {
     query: z.string().describe("Your question or request for the AI agent")
-  }, async (args) => {
-    logger.info(`Sending query to Dust agent: ${args.query}`);
+  }, async ({ query }) => {
+    logger.info(`Sending query to Dust agent: ${query}`);
     
     try {
       // Get dust client instance
@@ -58,19 +99,12 @@ export const createMcpServer = () => {
       const client = dustClientInstance.getClient();
       const userContext = dustClientInstance.getUserContext();
       
-      // Create a session for this conversation
-      const session = sessionManager.createSession({
-        toolName: "dust-query",
-        query: args.query,
-        timestamp: new Date()
-      });
-      
-      // Create a conversation with the Dust agent
+          // Create a conversation with the Dust agent
       const result = await client.createConversation({
         title: "MCP Bridge Query",
         visibility: "unlisted",
         message: {
-          content: args.query,
+          content: query,
           mentions: [
             { configurationId: dustClient.getAgentId() }
           ],
@@ -89,11 +123,8 @@ export const createMcpServer = () => {
       const { conversation, message } = result.value;
       logger.info(`Created conversation: ${conversation.sId}, message: ${message.sId}`);
       
-      // Update session with conversation data
-      sessionManager.updateSession(session.id, {
-        conversationId: conversation.sId,
-        messageId: message.sId
-      });
+      // Log conversation and message IDs for reference
+      logger.debug(`Conversation ID: ${conversation.sId}, Message ID: ${message.sId}`);
       
       // Stream the agent's response
       const streamResult = await client.streamAgentAnswerEvents({
@@ -141,14 +172,6 @@ export const createMcpServer = () => {
               // Ignore other event types
           }
         }
-        
-        // Update session with the answer
-        sessionManager.updateSession(session.id, {
-          answer,
-          chainOfThought: chainOfThought || null,
-          completed: true,
-          completedAt: new Date()
-        });
         
         if (answer) {
           return { content: [{ type: "text", text: answer }] };

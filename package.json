@@ -12,7 +12,7 @@
     "dev": "ts-node-esm src/index.ts",
     "dev:server": "cross-env START_MODE=server ts-node-esm src/index.ts",
     "dev:client": "cross-env START_MODE=client ts-node-esm src/index.ts",
-    "test": "npm run build && node --test dist/mcp-dust.test.js",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.mjs",
     "lint": "eslint src/**/*.ts"
   },
   "keywords": [
@@ -24,18 +24,21 @@
   "license": "ISC",
   "description": "MCP Bridge Server for Dust AI integration",
   "devDependencies": {
-    "@modelcontextprotocol/sdk": "^1.8.0",
     "@tsconfig/node23": "^23.0.1",
     "@types/eventsource": "^1.1.15",
     "@types/express": "^4.17.21",
+    "@types/jest": "^29.5.14",
     "@types/node": "^22.13.14",
     "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.3.1",
     "ts-node": "^10.9.2",
     "typescript": "^5.8.2",
     "zod": "^3.24.2"
   },
   "dependencies": {
     "@dust-tt/client": "^1.0.32",
+    "@modelcontextprotocol/sdk": "^1.8.0",
     "cross-env": "^7.0.3",
     "dotenv": "^16.4.7",
     "eventsource": "^3.0.6",

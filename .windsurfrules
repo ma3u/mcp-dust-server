@@ -1,17 +1,41 @@
 ### Architecture Analysis:
 - Need to bridge MCP protocol with Dust API while maintaining state[1][2]
 - SSE required for real-time updates[9]
-Context preservation needs session management[6]
+- use modelcontextprotocol/mcp-core 
+- Use the SDK adheres to MCP's JSON-RPC 2.0 messaging format
+- use remote (HTTP + SSE) transport mechanisms
+- support final MCP specification: https://spec.modelcontextprotocol.io/specification/2024-11-05/
+- support latest MCP specification: https://spec.modelcontextprotocol.io/specification/2025-03-26/
+- support HTTPStreamTransport and SSE 
+- Adding HTTP Stream endpoints in parallel
+- implement a session middleware: 
+- Using the official SDK for Typescript for Protocol Compliance(Full MCP spec adherence): https://github.com/modelcontextprotocol/typescript-sdk
+- use the core library: https://github.com/modelcontextprotocol/mcp-core
+- Implementing protocol version detection
 
-## Security Considerations:
-- API key masking in logs[10][11]
-- Input validation for file uploads[12]
-- Session isolation requirements[4]
+## Security checklist
+- Use Zod for all input validation (Source)
+- Implement dual transport support (SSE+HTTP)
+- Mask PII in logs using regex patterns
+- Add health check endpoints (/live, /ready)
+- Test with ≥100 concurrent sessions
+- Standardized Errors: Use McpError with appropriate error codes for consistent error responses.
+- Session Tracking: Use a Map or Redis to track active sessions and associate them with transports.
+- Auto-Cleanup: Implement TTL-based session expiration to prevent memory leaks.
+Follow the MCP Lifecycle: Implement the three key stages—Initialization, Message Exchange, and Termination.
+- Transport Selection: Use SSE for real-time streaming and HTTP for batch processing. Choose transports based on your application needs.
+- Environment Variables: Store sensitive data (e.g., API keys) in environment variables and never hard-code them.
+- Use the Official SDK: Install the MCP TypeScript SDK to ensure compliance with the latest MCP specification.
+- Mask Sensitive Data in Logs: Ensure API keys and session IDs are masked in logs.
+- Input Sanitization: Validate all user inputs to prevent injection attacks.
+- Caching: Cache frequently accessed resources to reduce latency.
+- Concurrency: Use asynchronous programming to handle multiple requests concurrently.
 
 ## Dust Integration:
 - Analyze Dust SDK patterns[2]
 - Agent configuration requirements[7]
 - Stream handling best practices[9]
+- Use the Dust SDK for Typescript: https://github.com/dust-tt/dust-sdk-js
 
 ## Protocol Mapping:
 - MCP tools ↔ Dust agent capabilities[1][3]
@@ -23,15 +47,18 @@ Context preservation needs session management[6]
 - Conversation context caching
 - Timeout handling[4]
 
-### Key Technical Decisions:
+## Key Technical Decisions:
 
 1. **Session Management**:
-- UUID-based session isolation[6]
-- Context preserved in encrypted Map store
-- Automatic cleanup after timeout[4]
+- Session Storage: Use Redis for production deployments
+- Validation: Verify session ownership for resource access
+- Encryption: Encrypt sensitive context data at rest
+- Monitoring: Track session metrics (duration, resource usage)
+- Testing: Use MCP Inspector for validation to test server compliance and debug interactions.
+- use the Auto-Expiring Sessions: LRU cache with TTL-based cleanup
 
 2. **Streaming Architecture**:
-- SSE for real-time updates[9]
+- SSE and HTTPStreamTransport for real-time updates[9]
 - Chunked response handling[2]
 - Event type differentiation[1]
 
@@ -44,6 +71,13 @@ Context preservation needs session management[6]
 - Official SDK usage[2]
 - Context-aware agent prompting[7]
 - Error propagation handling[5]
+
+5. **Documentation**:
+- Document all tools, resources, and endpoints clearly for developers and the end users using your server.
+
+## Troubleshooting
+
+- If you have issues with the server implementation, check the reference implementation for type script you can find on the offical website: https://github.com/modelcontextprotocol/servers?tab=readme-ov-file#-reference-servers
 
 
 [1] https://github.com/modelcontextprotocol/typescript-sdk

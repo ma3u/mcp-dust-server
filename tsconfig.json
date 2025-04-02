@@ -11,7 +11,8 @@
     "declaration": true,
     "lib": ["ES2022", "DOM"],
     "forceConsistentCasingInFileNames": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "isolatedModules": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

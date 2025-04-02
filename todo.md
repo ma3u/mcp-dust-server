@@ -4,32 +4,35 @@
 
 ## Immediate Tasks
 
-- [x] [P0] Initialize MCP server scaffolding (Owner: Core Team)
-- [x] [P0] Configure Dust API client (Owner: AI Team)
-- [x] [P0] Implement basic session management (Owner: Backend)
-- [x] [P1] Set up SSE transport layer (Owner: Networking)
-- [x] [P1] Create secret masking logger (Owner: Security)
+- [x] [P0] Initialize MCP server scaffolding  
+- [x] [P0] Configure Dust API client  
+- [x] [P0] Implement basic session management  
+- [ ] [P1] Set up SSE transport layer based on the MCP SDK library 
+- [ ] [P1] Implement HTTP Stream Transport wrapper
+- [x] [P1] Create secret masking logger  
+- [ ] [P1] Use Session management official MCP TypeScript SDK 
+- [ ] [P1] Add session management middleware
 
 ## Core Features
 
-- [ ] [P0] Implement file upload resource (Owner: Storage)
-- [x] [P0] Create stream parsing adapter (Owner: AI Team)
-- [ ] [P1] Add conversation history storage (Owner: Backend)
-- [ ] [P1] Develop context validation schema (Owner: Validation)
+- [ ] [P0] Implement file upload resource  
+- [x] [P0] Create stream parsing adapter  
+- [ ] [P1] Add conversation history storage  
+- [ ] [P1] Develop context validation schema   
 
 ## Testing & Security
 
-- [ ] [P0] Write MCP compliance tests (Owner: QA)
-- [ ] [P0] Implement rate limiting (Owner: Security)
-- [ ] [P1] Create load testing scenarios (Owner: DevOps)
-- [ ] [P2] Develop fuzzing tests (Owner: Security)
+- [ ] [P0] Write MCP compliance tests (Use the latest MCP spec)
+- [ ] [P0] Implement rate limiting  
+- [ ] [P1] Create load testing scenarios  
+- [ ] [P2] Develop fuzzing tests  
 
 ## Deployment Tasks
 
-- [ ] [P0] Build production Docker image (Owner: DevOps)
-- [ ] [P1] Configure cloud storage buckets (Owner: Cloud)
-- [ ] [P1] Set up monitoring dashboard (Owner: Ops)
-- [ ] [P2] Implement auto-scaling rules (Owner: Cloud)
+- [ ] [P0] Build production Docker image  
+- [ ] [P1] Configure cloud storage buckets  
+- [ ] [P1] Set up monitoring dashboard  
+- [ ] [P2] Implement auto-scaling rules 
 
 ---
 
@@ -39,6 +42,7 @@
 - [x] Dust API stability
 - [x] Node.js 20+ (ESM support)
 - [ ] Redis 7+ for production sessions
+- [ ] Support MCP spec compliance (2025-03-26)
 
 ## Risk Management
 
