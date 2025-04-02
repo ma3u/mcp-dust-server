@@ -12,7 +12,13 @@
     "lib": ["ES2022", "DOM"],
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "isolatedModules": true
+    "isolatedModules": true,
+    "paths": {
+      "https://esm.sh/lodash": ["./node_modules/@types/lodash/index.d.ts"],
+      "https://esm.sh/lodash@*": ["./node_modules/@types/lodash/index.d.ts"],
+      "https://esm.sh/lodash-es": ["./node_modules/@types/lodash-es/index.d.ts"],
+      "https://esm.sh/lodash-es@*": ["./node_modules/@types/lodash-es/index.d.ts"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]
