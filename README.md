@@ -7,6 +7,8 @@ This repository contains an implementation of a Model Context Protocol (MCP) ser
 - Separate MCP server and test client components
 - Interaction with Dust AI agents via the Dust API
 - Real-time streaming responses using Server-Sent Events (SSE) and HTTP Stream Transport
+- Full JSON-RPC 2.0 support with 'initialize', 'message', 'terminate', and 'run' methods
+- Direct tool execution via the 'run' method for simplified client integration
 - Robust session management and context preservation
 - Secure API key handling with PII masking in logs
 - Heartbeat mechanism to maintain persistent connections
@@ -184,7 +186,9 @@ To integrate the Dust MCP Server with Claude Desktop, update its configuration f
 ```
 
 
-## Testing with the Web Client
+## Testing
+
+### Web Client Testing
 
 The project includes a web-based test client accessible at `http://localhost:5002` (or your configured CLIENT_PORT) when you run the client component. This web interface allows you to:
 
@@ -193,6 +197,26 @@ The project includes a web-based test client accessible at `http://localhost:500
 3. Send queries to your Dust agent and receive streaming responses
 4. View responses in real-time with detailed logging
 5. Monitor connection status with visual indicators
+
+### Command-Line Testing
+
+The project includes command-line test scripts for testing different aspects of the server:
+
+1. **Dust API Test Client**:
+
+   ```bash
+   npm run test:dust-client
+   ```
+
+   Tests direct interaction with the Dust API without going through the MCP server.
+
+2. **JSON-RPC Run Method Test**:
+
+   ```bash
+   npm run test:run-method
+   ```
+
+   Tests the JSON-RPC 'run' method implementation for direct tool execution via the HTTP Stream transport.
 
 ### Connection Status Indicators
 
@@ -215,6 +239,8 @@ The server implements a heartbeat mechanism that sends periodic messages to keep
 - `GET /ready` - Server readiness check endpoint
 - `GET /sse` - Establish SSE connection with automatic heartbeat
 - `POST /stream` - HTTP Stream Transport endpoint for bidirectional communication
+  - Supports JSON-RPC methods: 'initialize', 'message', 'terminate', and 'run'
+  - Direct tool execution via the 'run' method
 - `GET /debug/sessions` - View active session information (development only)
 - `GET /debug/connections` - View active connection information (development only)
 
@@ -237,10 +263,12 @@ The server supports two transport mechanisms:
 1. **echo**
    - Description: Echoes back the provided message (for testing)
    - Parameters: `message` (string)
+   - Access via: Tool call or direct 'run' method
 
 2. **dust-query**
    - Description: Send a query to your Dust AI agent
    - Parameters: `query` (string)
+   - Access via: Tool call or direct 'run' method
 
 ## Development
 
@@ -255,6 +283,8 @@ src/
 │   └── client-server.ts    # Test client implementation
 ├── utils/
 │   ├── dust-client.ts      # Dust API client wrapper
+│   ├── dust-test-client.ts # Dust API test client
+│   ├── test-run-method.ts  # JSON-RPC 'run' method test script
 │   ├── secure-logger.ts    # PII-masking secure logger
 │   ├── session-manager.ts  # Session management implementation
 │   └── http-stream-transport.ts # HTTP Stream Transport implementation

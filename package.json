@@ -13,6 +13,8 @@
     "dev:server": "cross-env START_MODE=server ts-node-esm src/index.ts",
     "dev:client": "cross-env START_MODE=client ts-node-esm src/index.ts",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.mjs",
+    "test:dust-client": "node dist/utils/dust-test-client.js",
+    "test:run-method": "node dist/utils/test-run-method.js",
     "lint": "eslint src/**/*.ts"
   },
   "keywords": [

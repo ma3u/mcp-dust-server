@@ -1,5 +1,3 @@
-
-
 # Prioritized Todo List
 
 ## Immediate Tasks
@@ -7,25 +5,30 @@
 - [x] [P0] Initialize MCP server scaffolding  
 - [x] [P0] Configure Dust API client  
 - [x] [P0] Implement basic session management  
-- [ ] [P1] Set up SSE transport layer based on the MCP SDK library 
-- [ ] [P1] Implement HTTP Stream Transport wrapper
+- [x] [P1] Set up SSE transport layer based on the MCP SDK library 
+- [x] [P1] Implement HTTP Stream Transport wrapper
 - [x] [P1] Create secret masking logger  
-- [ ] [P1] Use Session management official MCP TypeScript SDK 
-- [ ] [P1] Add session management middleware
+- [x] [P1] Use Session management official MCP TypeScript SDK 
+- [x] [P1] Add session management middleware
+- [x] [P0] Implement JSON-RPC 'run' method for direct tool execution
 
 ## Core Features
 
 - [ ] [P0] Implement file upload resource  
 - [x] [P0] Create stream parsing adapter  
-- [ ] [P1] Add conversation history storage  
-- [ ] [P1] Develop context validation schema   
+- [x] [P1] Add conversation history storage  
+- [x] [P1] Develop context validation schema   
+- [x] [P1] Create Dust API test client
+- [x] [P0] Implement direct tool execution via 'run' method
 
 ## Testing & Security
 
-- [ ] [P0] Write MCP compliance tests (Use the latest MCP spec)
-- [ ] [P0] Implement rate limiting  
+- [x] [P0] Write MCP compliance tests (Use the latest MCP spec)
+- [x] [P0] Implement rate limiting  
 - [ ] [P1] Create load testing scenarios  
 - [ ] [P2] Develop fuzzing tests  
+- [x] [P1] Create JSON-RPC 'run' method test script
+- [ ] [P1] Implement comprehensive error handling for all transport methods
 
 ## Deployment Tasks
 
@@ -42,7 +45,7 @@
 - [x] Dust API stability
 - [x] Node.js 20+ (ESM support)
 - [ ] Redis 7+ for production sessions
-- [ ] Support MCP spec compliance (2025-03-26)
+- [x] Support MCP spec compliance (2025-03-26)
 
 ## Risk Management
 
@@ -60,4 +63,4 @@
 - [ ] Code Quality: ESLint 0 warnings + 90% coverage
 - [ ] Performance: <500ms P99 latency under 1k RPS
 - [ ] Security: Zero critical vulnerabilities
-- [ ] Compliance: Full MCP spec adherence
+- [x] Compliance: Full MCP spec adherence
