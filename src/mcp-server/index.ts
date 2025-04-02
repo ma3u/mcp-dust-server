@@ -158,27 +158,60 @@ async function main() {
           });
         }
         
-        // Create a transport for this request
-        const transport = new HTTPStreamTransport('/stream', res, req.mcpSessionId);
+        // Get the session ID from the request headers
+        const sessionId = req.mcpSessionId || req.headers['mcp-session-id'] as string;
         
-        // Connect to MCP server first
-        await mcpServer.connect(transport);
+        if (!sessionId) {
+          logger.warn('Missing session ID in HTTP Stream request');
+          return res.status(400).json({
+            jsonrpc: '2.0',
+            error: { 
+              code: -32602, 
+              message: 'Missing session ID' 
+            },
+            id: req.body.id || null
+          });
+        }
         
-        // Process the message if it exists in the request body
-        if (Object.keys(req.body).length > 0) {
-          logger.debug(`Processing message in request body: ${JSON.stringify(req.body)}`);
+        // For JSON-RPC messages, use the HTTP Stream message handler
+        if (req.body.jsonrpc === '2.0' && req.body.method && req.body.id !== undefined) {
+          logger.debug(`Processing JSON-RPC message: ${JSON.stringify(req.body)}`);
           
-          // Process the message through the transport
-          // The MCP server will handle the message and send the response
-          // through the transport's send method
-          await transport.processMessage(req.body);
-          
-          // For JSON-RPC messages that require immediate response (not streaming),
-          // the transport will automatically close the connection after sending the response
+          // Use the registered HTTP Stream message handler
+          if ((mcpServer as any).handleHttpStreamMessage) {
+            const response = await (mcpServer as any).handleHttpStreamMessage(req.body, sessionId);
+            
+            // Send the response back
+            return res.status(200).json(response);
+          } else {
+            logger.error('HTTP Stream message handler not registered');
+            return res.status(500).json({
+              jsonrpc: '2.0',
+              error: { 
+                code: -32603, 
+                message: 'Internal server error: HTTP Stream message handler not registered' 
+              },
+              id: req.body.id || null
+            });
+          }
         } else {
-          // Just keep the connection open if no message to process
-          // This is useful for establishing a connection without sending a message
-          logger.debug('No message in request body, keeping connection open');
+          // For non-JSON-RPC messages or connection establishment, use the transport
+          // Create a transport for this request
+          const transport = new HTTPStreamTransport('/stream', res, sessionId);
+          
+          // Connect to MCP server first
+          await mcpServer.connect(transport);
+          
+          // Process the message if it exists in the request body
+          if (Object.keys(req.body).length > 0) {
+            logger.debug(`Processing non-JSON-RPC message: ${JSON.stringify(req.body)}`);
+            
+            // Process the message through the transport
+            await transport.processMessage(req.body);
+          } else {
+            // Just keep the connection open if no message to process
+            logger.debug('No message in request body, keeping connection open');
+          }
         }
       } catch (error) {
         logger.error(`Error handling HTTP Stream request: ${error instanceof Error ? error.message : String(error)}`);
@@ -189,7 +222,7 @@ async function main() {
               code: -32603, 
               message: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error') 
             },
-            id: null
+            id: req.body.id || null
           });
         }
       }

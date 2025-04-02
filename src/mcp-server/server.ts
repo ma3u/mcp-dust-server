@@ -202,6 +202,235 @@ export const createMcpServer = () => {
 
   // Add more tools as needed
 
+  // Create a handler for HTTP Stream messages according to MCP specification
+  const handleHttpStreamMessage = async (message: any, sessionId: string) => {
+    try {
+      logger.debug(`Processing HTTP Stream message: ${JSON.stringify(message)}`);
+      
+      // Ensure session ID is included in the message
+      if (sessionId && !message.sessionId) {
+        message.sessionId = sessionId;
+      }
+      
+      // Process the message through the MCP server
+      // The MCP SDK doesn't expose a direct handleMessage method, so we need to
+      // use the internal mechanisms to process the message
+      
+      // For JSON-RPC requests, we need to validate and process them
+      if (message.jsonrpc === '2.0' && message.method && message.id !== undefined) {
+        // Validate the message based on its method
+        let isValid = true;
+        
+        if (message.method === 'initialize') {
+          const validation = validateInitializeRequest(message);
+          isValid = validation.success;
+          if (!isValid && 'error' in validation) {
+            logger.warn(`Invalid initialize request: ${JSON.stringify(validation.error.errors)}`);
+          }
+        } else if (message.method === 'message') {
+          const validation = validateMessageRequest(message);
+          isValid = validation.success;
+          if (!isValid && 'error' in validation) {
+            logger.warn(`Invalid message request: ${JSON.stringify(validation.error.errors)}`);
+          }
+        } else if (message.method === 'terminate') {
+          const validation = validateTerminateRequest(message);
+          isValid = validation.success;
+          if (!isValid && 'error' in validation) {
+            logger.warn(`Invalid terminate request: ${JSON.stringify(validation.error.errors)}`);
+          }
+        }
+        
+        if (!isValid) {
+          return {
+            jsonrpc: '2.0',
+            error: {
+              code: -32602,
+              message: 'Invalid params'
+            },
+            id: message.id
+          };
+        }
+        
+        // Process the message based on its method
+        if (message.method === 'initialize') {
+          // Handle initialize request
+          return {
+            jsonrpc: '2.0',
+            result: {
+              protocol_version: '2025-03-26',
+              server: {
+                name: process.env.MCP_NAME || "Dust MCP Bridge",
+                version: '1.0.0'
+              }
+            },
+            id: message.id
+          };
+        } else if (message.method === 'message') {
+          // Handle message request - this is where tool calls are processed
+          try {
+            // Extract the tool call if present
+            const toolCall = message.params?.message?.tool_calls?.[0];
+            
+            if (toolCall && toolCall.name) {
+              let result;
+              
+              // Process based on the tool name
+              if (toolCall.name === 'echo') {
+                const echoMessage = toolCall.parameters?.message;
+                logger.info(`Received echo message: ${echoMessage}`);
+                result = { content: [{ type: "text", text: `Echo: ${echoMessage}` }] };
+              } else if (toolCall.name === 'dust-query') {
+                const query = toolCall.parameters?.query;
+                logger.info(`Sending query to Dust agent: ${query}`);
+                
+                // Get dust client instance
+                const dustClientInstance = DustClient.getInstance();
+                const client = dustClientInstance.getClient();
+                const userContext = dustClientInstance.getUserContext();
+                
+                // Create a conversation with the Dust agent
+                const dustResult = await client.createConversation({
+                  title: "MCP Bridge Query",
+                  visibility: "unlisted",
+                  message: {
+                    content: query,
+                    mentions: [
+                      { configurationId: dustClient.getAgentId() }
+                    ],
+                    context: userContext
+                  }
+                });
+                
+                // Process the Dust result
+                if (dustResult.isErr()) {
+                  const errorMessage = dustResult.error?.message || "Unknown error";
+                  logger.error(`Error creating conversation: ${errorMessage}`);
+                  result = { content: [{ type: "text", text: `Error: ${errorMessage}` }] };
+                } else {
+                  // Get conversation and message details
+                  const { conversation, message } = dustResult.value;
+                  
+                  // Stream the agent's response
+                  const streamResult = await client.streamAgentAnswerEvents({
+                    conversation,
+                    userMessageId: message.sId,
+                  });
+                  
+                  if (streamResult.isErr()) {
+                    const errorMessage = streamResult.error?.message || "Unknown error";
+                    logger.error(`Error streaming response: ${errorMessage}`);
+                    result = { content: [{ type: "text", text: `Error streaming response: ${errorMessage}` }] };
+                  } else {
+                    // Process the streamed response
+                    const { eventStream } = streamResult.value;
+                    let answer = "";
+                    
+                    for await (const event of eventStream) {
+                      if (!event) continue;
+                      
+                      if (event.type === "generation_tokens" && event.classification === "tokens") {
+                        answer = (answer + event.text).trim();
+                      } else if (event.type === "agent_message_success") {
+                        answer = event.message?.content || answer;
+                      }
+                    }
+                    
+                    result = { content: [{ type: "text", text: answer || "No response from agent" }] };
+                  }
+                }
+              } else {
+                // Unknown tool
+                result = { content: [{ type: "text", text: `Unknown tool: ${toolCall.name}` }] };
+              }
+              
+              // Return the result in the expected format
+              return {
+                jsonrpc: '2.0',
+                result: {
+                  message: {
+                    role: 'assistant',
+                    content: result.content,
+                    tool_results: [
+                      {
+                        tool_call_id: toolCall.id,
+                        result: result
+                      }
+                    ]
+                  }
+                },
+                id: message.id
+              };
+            } else {
+              // No tool call found
+              return {
+                jsonrpc: '2.0',
+                result: {
+                  message: {
+                    role: 'assistant',
+                    content: [{ type: "text", text: "No tool call found in the message" }]
+                  }
+                },
+                id: message.id
+              };
+            }
+          } catch (error) {
+            logger.error(`Error processing message: ${error instanceof Error ? error.message : String(error)}`);
+            return {
+              jsonrpc: '2.0',
+              error: {
+                code: -32603,
+                message: `Internal error: ${error instanceof Error ? error.message : 'Unknown error'}`
+              },
+              id: message.id
+            };
+          }
+        } else if (message.method === 'terminate') {
+          // Handle terminate request
+          return {
+            jsonrpc: '2.0',
+            result: {},
+            id: message.id
+          };
+        } else {
+          // Unknown method
+          return {
+            jsonrpc: '2.0',
+            error: {
+              code: -32601,
+              message: `Method not found: ${message.method}`
+            },
+            id: message.id
+          };
+        }
+      } else {
+        // Not a valid JSON-RPC request
+        return {
+          jsonrpc: '2.0',
+          error: {
+            code: -32600,
+            message: 'Invalid Request: Not a valid JSON-RPC request'
+          },
+          id: message.id !== undefined ? message.id : null
+        };
+      }
+    } catch (error) {
+      logger.error(`Error handling HTTP Stream message: ${error instanceof Error ? error.message : String(error)}`);
+      return {
+        jsonrpc: '2.0',
+        error: {
+          code: -32603,
+          message: `Internal error: ${error instanceof Error ? error.message : 'Unknown error'}`
+        },
+        id: message.id !== undefined ? message.id : null
+      };
+    }
+  };
+
+  // Register the HTTP Stream message handler with the MCP server
+  // This is a custom extension to the McpServer class to handle HTTP Stream messages
+  (mcpServer as any).handleHttpStreamMessage = handleHttpStreamMessage;
+
   return mcpServer;
 };
 
