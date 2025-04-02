@@ -25,16 +25,24 @@ export const createMcpServer = () => {
     version: "1.0.0",
     protocolVersion: "2024-11-05",
     onRequest: (request: any) => {
-      logger.logRequest(request);
-      logger.debug('Received message:', JSON.stringify(request));
-      
-      // Validate request based on method
-      if (request.method === 'initialize') {
-        const validation = validateInitializeRequest(request);
-        if (!validation.success) {
-          logger.warn(`Invalid initialize request: ${JSON.stringify(validation.error.errors)}`);
-        }
-      } else if (request.method === 'message') {
+      // Add explicit error handling for all requests
+      try {
+        // Log request with more details for debugging
+        console.error('MCP Request received:', JSON.stringify(request, null, 2));
+        logger.logRequest(request);
+        logger.debug('Received message:', JSON.stringify(request));
+        
+        // Validate request based on method
+        if (request.method === 'initialize') {
+          console.error('Processing initialize request with params:', JSON.stringify(request.params, null, 2));
+          const validation = validateInitializeRequest(request);
+          if (!validation.success) {
+            logger.warn(`Invalid initialize request: ${JSON.stringify(validation.error.errors)}`);
+            console.error('Initialize validation failed:', JSON.stringify(validation.error.errors));
+          } else {
+            console.error('Initialize validation succeeded');
+          }
+        } else if (request.method === 'message') {
         const validation = validateMessageRequest(request);
         if (!validation.success) {
           logger.warn(`Invalid message request: ${JSON.stringify(validation.error.errors)}`);
@@ -56,21 +64,30 @@ export const createMcpServer = () => {
           });
         }
       } else if (request.method === 'terminate') {
+        console.error('Processing terminate request');
         const validation = validateTerminateRequest(request);
         if (!validation.success) {
           logger.warn(`Invalid terminate request: ${JSON.stringify(validation.error.errors)}`);
+          console.error('Terminate validation failed:', JSON.stringify(validation.error.errors));
         }
+      }
+      } catch (error) {
+        console.error('Error in onRequest handler:', error);
+        logger.error('Error in onRequest handler:', error);
       }
     },
     onResponse: (response: any) => {
-      logger.logResponse(response);
-      
-      // Add assistant responses to conversation history
-      if (response.result?.message) {
-        const message = response.result.message;
-        const sessionId = response.sessionId || 'unknown';
+      try {
+        // Log response with more details for debugging
+        console.error('MCP Response sent:', JSON.stringify(response, null, 2));
+        logger.logResponse(response);
         
-        conversationHistory.addMessage({
+        // Add assistant responses to conversation history
+        if (response.result?.message) {
+          const message = response.result.message;
+          const sessionId = response.sessionId || 'unknown';
+          
+          conversationHistory.addMessage({
           id: crypto.randomUUID(),
           sessionId,
           role: message.role,
@@ -82,8 +99,13 @@ export const createMcpServer = () => {
           }
         });
       }
+      } catch (error) {
+        console.error('Error in onResponse handler:', error);
+        logger.error('Error in onResponse handler:', error);
+      }
     },
     onError: (error: Error) => {
+      console.error("MCP ERROR:", error.message, error.stack);
       logger.error("MCP ERROR:", error.message, error.stack);
     }
   });

@@ -183,6 +183,81 @@ The server provides several endpoints for monitoring and health checks:
 - **POST /stream**: HTTP Stream Transport endpoint according to MCP specification
 - **POST /messages**: JSON-RPC endpoint for non-streaming MCP messages
 
+## Debugging with MCP Inspector
+
+The MCP Inspector is a powerful debugging tool that helps you visualize and troubleshoot the communication between clients and your MCP server. It acts as a proxy between clients and your server, allowing you to inspect the messages being exchanged.
+
+### Installing MCP Inspector
+
+```bash
+npm install -g @modelcontextprotocol/inspector
+```
+
+Or use it directly with npx:
+
+```bash
+npx @modelcontextprotocol/inspector
+```
+
+### Using the Inspector
+
+This repository includes a convenience script to run the MCP Inspector with the correct configuration:
+
+```bash
+./run-inspector.sh
+```
+
+This script will:
+
+1. Clean up any existing inspector processes
+2. Set the correct environment variables
+3. Start the inspector with the right configuration
+
+Once started, the MCP Inspector will be available at:
+
+- Web UI: [http://127.0.0.1:6274](http://127.0.0.1:6274)
+- Proxy Server: [http://127.0.0.1:6277](http://127.0.0.1:6277)
+
+### Connection Flow
+
+The MCP Inspector works by proxying connections between clients and your server:
+
+```text
+Client → MCP Inspector (6277) → Your MCP Server (5001)
+```
+
+### Inspector Features
+
+1. **Messages Tab**: View the JSON-RPC messages being exchanged between clients and your server
+2. **Logs Tab**: See detailed logs of the communication process
+3. **Test Tab**: Send custom messages to your server for testing
+4. **Sessions Tab**: Monitor active sessions and their state
+5. **Configuration Tab**: View and modify the inspector's configuration
+
+### Troubleshooting Common Issues
+
+1. **Server Disconnects Immediately**:
+   - Check your server's `onRequest` and `onResponse` handlers for errors
+   - Verify that your server is properly handling the initialize method
+   - Look for any uncaught exceptions in your server code
+
+2. **Connection Refused**:
+   - Ensure your server is running on port 5001
+   - Check that the SSE endpoint is accessible at [http://localhost:5001/sse](http://localhost:5001/sse)
+
+3. **Protocol Version Issues**:
+   - Make sure both your server and the inspector are using the same protocol version (2024-11-05)
+
+### Best Practices
+
+- Use the inspector during development to validate your server's compliance with the MCP specification
+- Test different message types to ensure your server handles them correctly
+- Check the response times to identify potential performance bottlenecks
+- Use the inspector to debug client-server communication issues
+- Verify that your server correctly implements the MCP lifecycle (initialize, message, terminate)
+- Add additional debug logging to your server code when troubleshooting issues
+- Check the server logs for any errors or warnings that might indicate issues
+
 ## Integration
 
 ### Windsurf IDE Configuration

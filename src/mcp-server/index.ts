@@ -144,36 +144,75 @@ async function main() {
         const transport = new SSEServerTransport('/messages', res);
         
         // Register a message handler for the transport
-        // We need to use a custom approach to intercept initialize messages
         // @ts-ignore - Accessing internal property for direct message handling
         transport.onMessage = async (message: any) => {
-          logger.debug(`SSE message received: ${JSON.stringify(message)}`);
-          
-          // Special handling for initialize method
-          if (message.method === 'initialize' && message.jsonrpc === '2.0' && message.id !== undefined) {
-            logger.info('Fast-tracking SSE initialize response');
+          try {
+            // Log the message for debugging
+            console.error(`SSE message received: ${JSON.stringify(message, null, 2)}`);
+            logger.debug(`SSE message received: ${JSON.stringify(message)}`);
             
-            // Send initialize response immediately to prevent timeout
-            const response = {
-              jsonrpc: "2.0" as const,  // Use const assertion to match expected type
-              result: {
-                protocolVersion: '2024-11-05',
-                serverInfo: {
-                  name: process.env.MCP_NAME || "Dust MCP Bridge",
-                  version: '1.0.0'
-                },
-                capabilities: {}
-              },
-              id: message.id
-            };
+            // Special handling for initialize method to avoid double-response issues
+            if (message.method === 'initialize' && message.jsonrpc === '2.0' && message.id !== undefined) {
+              console.error('Handling initialize message from client:', JSON.stringify(message, null, 2));
+              logger.info('Handling initialize message from client');
+              
+              try {
+                // Extract client info from the message
+                const clientName = message.params.clientInfo?.name || message.params.client?.name || 'Unknown Client';
+                const clientVersion = message.params.clientInfo?.version || message.params.client?.version || '0.0.0';
+                const protocolVersion = message.params.protocolVersion || message.params.protocol_version || '2024-11-05';
+                
+                console.error(`Client connected: ${clientName} v${clientVersion} using protocol ${protocolVersion}`);
+                
+                // Create initialize response with correct format according to MCP spec
+                const response = {
+                  jsonrpc: "2.0" as const,
+                  result: {
+                    protocol_version: '2024-11-05',
+                    server: {
+                      name: process.env.MCP_NAME || "Dust MCP Bridge",
+                      version: '1.0.0'
+                    },
+                    capabilities: {
+                      tools: ['echo', 'dust-query']
+                    }
+                  },
+                  id: message.id
+                };
+                
+                // Send response directly through transport
+                console.error('Sending initialize response:', JSON.stringify(response, null, 2));
+                await transport.send(response);
+                
+                // Important: Don't pass initialize messages to the MCP server to avoid double-response
+                return;
+              } catch (error) {
+                console.error('Error handling initialize message:', error);
+                logger.error('Error handling initialize message:', error);
+                
+                // Send error response
+                const errorResponse = {
+                  jsonrpc: "2.0" as const,
+                  error: {
+                    code: -32603,
+                    message: `Internal server error: ${error instanceof Error ? error.message : String(error)}`
+                  },
+                  id: message.id
+                };
+                
+                await transport.send(errorResponse);
+                return;
+              }
+            }
             
-            // Send response directly through transport
-            await transport.send(response);
+            // For all other messages, let the MCP server handle them normally
+            // @ts-ignore - Accessing internal method for direct message processing
+            console.error('Passing message to MCP server:', message.method);
+            await (mcpServer as any)._onMessage(message);
+          } catch (error) {
+            console.error('Error in SSE message handler:', error);
+            logger.error('Error in SSE message handler:', error);
           }
-          
-          // Let the MCP server handle the message normally
-          // @ts-ignore - Accessing internal method for direct message processing
-          await (mcpServer as any)._onMessage(message);
         };
         
         // Connect to MCP server

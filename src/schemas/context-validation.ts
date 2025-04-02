@@ -92,12 +92,28 @@ export const initializeRequestSchema = z.object({
   jsonrpc: z.literal('2.0'),
   method: z.literal('initialize'),
   params: z.object({
-    protocol_version: z.string(),
+    // Accept both protocol_version (MCP spec) and protocolVersion (Claude Desktop)
+    protocol_version: z.string().optional(),
+    protocolVersion: z.string().optional(),
+    // Accept both client (MCP spec) and clientInfo (Claude Desktop)
     client: z.object({
       name: z.string(),
       version: z.string()
+    }).optional(),
+    clientInfo: z.object({
+      name: z.string(),
+      version: z.string()
+    }).optional(),
+    capabilities: z.object({}).optional()
+  })
+    // Ensure at least one version field is present
+    .refine(data => data.protocol_version !== undefined || data.protocolVersion !== undefined, {
+      message: "Either protocol_version or protocolVersion must be provided"
     })
-  }),
+    // Ensure at least one client info field is present
+    .refine(data => data.client !== undefined || data.clientInfo !== undefined, {
+      message: "Either client or clientInfo must be provided"
+    }),
   id: z.number().or(z.string())
 });
 
