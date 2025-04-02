@@ -266,6 +266,107 @@ export const createMcpServer = () => {
             },
             id: message.id
           };
+        } else if (message.method === 'run') {
+          // Handle run method for direct tool execution
+          try {
+            // Extract the tool name and arguments
+            const { tool, args } = message.params;
+            let result;
+            
+            logger.info(`Received run request for tool: ${tool}`);
+            logger.debug(`Tool arguments: ${JSON.stringify(args)}`);
+            
+            // Handle different tools
+            if (tool === 'echo') {
+              // Echo tool implementation
+              logger.info(`Executing echo tool with message: ${args.message}`);
+              result = { message: args.message };
+            } else if (tool === 'dust-query') {
+              // Dust query implementation
+              logger.info(`Executing dust-query tool with query: ${args.query}`);
+              
+              // Get dust client instance
+              const dustClientInstance = DustClient.getInstance();
+              const client = dustClientInstance.getClient();
+              const userContext = dustClientInstance.getUserContext();
+              
+              // Create a conversation with the Dust agent
+              const dustResult = await client.createConversation({
+                title: "MCP Bridge Direct Query",
+                visibility: "unlisted",
+                message: {
+                  content: args.query,
+                  mentions: [{ configurationId: dustClient.getAgentId() }],
+                  context: userContext
+                }
+              });
+              
+              if (dustResult.isErr()) {
+                const errorMessage = dustResult.error?.message || "Unknown error";
+                logger.error(`Error creating conversation: ${errorMessage}`);
+                throw new Error(errorMessage);
+              }
+              
+              // Get conversation and message details
+              const { conversation, message } = dustResult.value;
+              
+              // Stream the agent's response
+              const streamResult = await client.streamAgentAnswerEvents({
+                conversation,
+                userMessageId: message.sId,
+              });
+              
+              if (streamResult.isErr()) {
+                const errorMessage = streamResult.error?.message || "Unknown error";
+                logger.error(`Error streaming response: ${errorMessage}`);
+                throw new Error(errorMessage);
+              }
+              
+              // Process the streamed response
+              const { eventStream } = streamResult.value;
+              let answer = "";
+              
+              for await (const event of eventStream) {
+                if (!event) continue;
+                
+                if (event.type === "generation_tokens" && event.text) {
+                  answer = (answer + event.text).trim();
+                } else if (event.type === "agent_message_success") {
+                  answer = event.message?.content || answer;
+                }
+              }
+              
+              result = { response: answer || "No response from agent" };
+            } else {
+              // Unknown tool
+              logger.warn(`Unknown tool requested: ${tool}`);
+              return {
+                jsonrpc: '2.0',
+                error: { 
+                  code: -32601, 
+                  message: `Unknown tool: ${tool}` 
+                },
+                id: message.id
+              };
+            }
+            
+            // Return the successful result
+            return {
+              jsonrpc: '2.0',
+              result,
+              id: message.id
+            };
+          } catch (error) {
+            logger.error(`Error executing tool: ${error instanceof Error ? error.message : String(error)}`);
+            return {
+              jsonrpc: '2.0',
+              error: { 
+                code: -32603, 
+                message: `Internal error: ${error instanceof Error ? error.message : 'Unknown error'}` 
+              },
+              id: message.id
+            };
+          }
         } else if (message.method === 'message') {
           // Handle message request - this is where tool calls are processed
           try {
