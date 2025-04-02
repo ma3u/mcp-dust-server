@@ -135,41 +135,61 @@ async function main() {
       }
     });
     
-    // Configure HTTP Stream endpoint
+    // Configure HTTP Stream endpoint according to MCP specification
     app.post('/stream', async (req, res) => {
       try {
         logger.info(`New HTTP Stream connection from ${req.ip}, session: ${req.mcpSessionId || 'none'}`);
+        
+        // Set appropriate headers for JSON-RPC response
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Mcp-Session-Id');
         
         // Validate request body
         if (!req.body || typeof req.body !== 'object') {
           logger.warn(`Invalid request body: ${JSON.stringify(req.body)}`);
           return res.status(400).json({
-            error: 'Invalid request format',
-            message: 'Request body must be a valid JSON object'
+            jsonrpc: '2.0',
+            error: { 
+              code: -32600, 
+              message: 'Invalid Request: Request body must be a valid JSON object' 
+            },
+            id: null
           });
         }
         
-        // Create transport and connect
+        // Create a transport for this request
         const transport = new HTTPStreamTransport('/stream', res, req.mcpSessionId);
+        
+        // Connect to MCP server first
+        await mcpServer.connect(transport);
         
         // Process the message if it exists in the request body
         if (Object.keys(req.body).length > 0) {
           logger.debug(`Processing message in request body: ${JSON.stringify(req.body)}`);
-          // Connect to MCP server first
-          await mcpServer.connect(transport);
           
-          // Then process the message
+          // Process the message through the transport
+          // The MCP server will handle the message and send the response
+          // through the transport's send method
           await transport.processMessage(req.body);
+          
+          // For JSON-RPC messages that require immediate response (not streaming),
+          // the transport will automatically close the connection after sending the response
         } else {
-          // Just connect if no message to process
-          await mcpServer.connect(transport);
+          // Just keep the connection open if no message to process
+          // This is useful for establishing a connection without sending a message
+          logger.debug('No message in request body, keeping connection open');
         }
       } catch (error) {
         logger.error(`Error handling HTTP Stream request: ${error instanceof Error ? error.message : String(error)}`);
         if (!res.headersSent) {
           res.status(500).json({
-            error: 'Internal server error',
-            message: error instanceof Error ? error.message : 'Unknown error'
+            jsonrpc: '2.0',
+            error: { 
+              code: -32603, 
+              message: 'Internal server error: ' + (error instanceof Error ? error.message : 'Unknown error') 
+            },
+            id: null
           });
         }
       }

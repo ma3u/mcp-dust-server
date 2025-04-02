@@ -135,9 +135,34 @@ export class HTTPStreamTransport implements Transport {
     }
     
     try {
+      // Check if this is a JSON-RPC message
+      const isJsonRpc = message.jsonrpc === '2.0' && message.method && message.id !== undefined;
+      
+      if (isJsonRpc) {
+        logger.debug(`Processing JSON-RPC message: ${JSON.stringify(message)}`);
+        
+        // Add session ID to the message if available and not already present
+        if (this.sessionId && !message.sessionId) {
+          message.sessionId = this.sessionId;
+        }
+      }
+      
+      // Pass the message to the registered handler
       await this.messageHandler(message);
     } catch (error) {
       logger.error(`Error processing message on HTTP Stream transport: ${error instanceof Error ? error.message : String(error)}`);
+      
+      // If this is a JSON-RPC message, send an error response
+      if (message.jsonrpc === '2.0' && message.id !== undefined) {
+        await this.send({
+          jsonrpc: '2.0',
+          error: {
+            code: -32603,
+            message: `Internal server error: ${error instanceof Error ? error.message : 'Unknown error'}`
+          },
+          id: message.id
+        });
+      }
     }
   }
 
