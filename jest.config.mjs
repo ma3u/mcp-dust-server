@@ -1,3 +1,4 @@
+// Use jest.config.mjs for new modules written in ESM (ECMAScript Modules)
 /** @type {import('ts-jest').JestConfigWithTsJest} */
 export default {
   preset: 'ts-jest/presets/js-with-ts-esm',

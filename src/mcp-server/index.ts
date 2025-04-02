@@ -32,8 +32,12 @@ app.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, DELETE');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Last-Event-ID, Mcp-Session-Id');
+  res.setHeader('Access-Control-Expose-Headers', 'Content-Type, Last-Event-ID');
+  
+  // Handle preflight requests
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    res.status(200).end();
+    return;
   }
   next();
 });
@@ -100,6 +104,34 @@ async function main() {
     // Configure SSE endpoint
     app.get('/sse', async (req, res) => {
       logger.info(`New SSE connection from ${req.ip}, session: ${req.mcpSessionId || 'none'}`);
+      
+      // Set proper SSE headers
+      res.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Access-Control-Allow-Origin': '*'
+      });
+      
+      // Send initial connection message
+      res.write(`data: ${JSON.stringify({ connected: true, timestamp: new Date().toISOString() })}\n\n`);
+      
+      // Set up heartbeat to keep connection alive
+      const heartbeatInterval = setInterval(() => {
+        if (!res.writableEnded) {
+          res.write(`event: heartbeat\ndata: ${JSON.stringify({ timestamp: new Date().toISOString() })}\n\n`);
+        } else {
+          clearInterval(heartbeatInterval);
+        }
+      }, 30000); // Send heartbeat every 30 seconds
+      
+      // Handle client disconnect
+      req.on('close', () => {
+        clearInterval(heartbeatInterval);
+        logger.info(`SSE connection closed from ${req.ip}, session: ${req.mcpSessionId || 'none'}`);
+      });
+      
+      // Create and connect transport
       const transport = new SSEServerTransport('/messages', res);
       await mcpServer.connect(transport);
     });

@@ -190,42 +190,82 @@
                 sessionId = null;
                 messageEndpoint = null;
                 
-                // Connect to the SSE endpoint
-                eventSource = new EventSource('http://127.0.0.1:5001/sse');
+                // Connect to the SSE endpoint with proper error handling
+                const serverUrl = 'http://127.0.0.1:5001/sse';
+                logMessage(`Connecting to SSE server at: ${serverUrl}`);
+                eventSource = new EventSource(serverUrl);
                 
                 // Handle the connection open event
                 eventSource.onopen = () => {
                     logMessage('SSE connection established with server');
-                    // Session info will come in a separate event
+                    statusEl.classList.remove('disconnected', 'pending');
+                    statusEl.classList.add('connected');
+                    statusEl.textContent = 'Connected';
+                    disconnectBtn.disabled = false;
+                    
+                    // Set message endpoint based on server URL
+                    messageEndpoint = 'http://127.0.0.1:5001/stream';
+                    logMessage(`Using message endpoint: ${messageEndpoint}`);
                 };
 
                 // Handle connection errors
                 eventSource.onerror = (event) => {
+                    console.error('SSE connection error:', event);
                     logMessage(`SSE connection error: ${event.type}`, true);
-                    disconnectSSE();
                     
-                    // Auto reconnect after a short delay if enabled
-                    if (autoReconnect) {
-                        logMessage('Attempting to reconnect in 3 seconds...');
-                        setTimeout(() => {
-                            if (autoReconnect) { // Check again in case it was disabled during the timeout
-                                connectSSE();
-                            }
-                        }, 3000);
+                    // Only disconnect if we're not in a pending state (avoid disconnect during initial connection)
+                    if (!statusEl.classList.contains('pending')) {
+                        disconnectSSE();
+                        
+                        // Auto reconnect after a short delay if enabled
+                        if (autoReconnect) {
+                            logMessage('Attempting to reconnect in 3 seconds...');
+                            setTimeout(() => {
+                                if (autoReconnect) { // Check again in case it was disabled during the timeout
+                                    connectSSE();
+                                }
+                            }, 3000);
+                        }
                     }
                 };
+                
+                // Handle heartbeat events to keep connection alive
+                eventSource.addEventListener('heartbeat', (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('Heartbeat received:', data);
+                        // Update connection status if not already connected
+                        if (!statusEl.classList.contains('connected')) {
+                            statusEl.classList.remove('disconnected', 'pending');
+                            statusEl.classList.add('connected');
+                            statusEl.textContent = 'Connected';
+                            disconnectBtn.disabled = false;
+                        }
+                    } catch (error) {
+                        console.warn('Error parsing heartbeat:', error);
+                    }
+                });
 
                 eventSource.addEventListener('session', (event) => {
                     try {
                         const data = JSON.parse(event.data);
                         sessionId = data.sessionId;
-                        messageEndpoint = data.messageEndpoint;
+                        // If messageEndpoint is provided in the session data, use it
+                        if (data.messageEndpoint) {
+                            messageEndpoint = data.messageEndpoint;
+                        }
                         logMessage(`Session established: ${sessionId}`);
                         logMessage(`Message endpoint: ${messageEndpoint}`);
                         
                         // Enable buttons now that we have session info
                         sendBtn.disabled = false;
                         sendQueryBtn.disabled = false;
+                        
+                        // Update connection status
+                        statusEl.classList.remove('disconnected', 'pending');
+                        statusEl.classList.add('connected');
+                        statusEl.textContent = 'Connected';
+                        disconnectBtn.disabled = false;
                     } catch (error) {
                         logMessage(`Error parsing session data: ${error.message}`, true);
                     }
@@ -234,9 +274,31 @@
                 // Handle regular messages without event name
                 eventSource.onmessage = (event) => {
                     try {
+                        console.log('Received message:', event.data);
                         const data = JSON.parse(event.data);
                         logMessage(`Received message: ${JSON.stringify(data, null, 2)}`);
+                        
+                        // If we receive any message and we're not connected, update status
+                        if (!statusEl.classList.contains('connected')) {
+                            statusEl.classList.remove('disconnected', 'pending');
+                            statusEl.classList.add('connected');
+                            statusEl.textContent = 'Connected';
+                            disconnectBtn.disabled = false;
+                        }
+                        
+                        // If message contains session info, use it
+                        if (data.sessionId) {
+                            sessionId = data.sessionId;
+                            logMessage(`Session ID from message: ${sessionId}`);
+                        }
+                        
+                        // Enable message buttons if we have a connection
+                        if (statusEl.classList.contains('connected')) {
+                            sendBtn.disabled = false;
+                            sendQueryBtn.disabled = false;
+                        }
                     } catch (error) {
+                        console.warn('Error parsing message:', error);
                         logMessage(`Error parsing message: ${error.message}`, true);
                     }
                 };
@@ -251,6 +313,7 @@
                     }
                 });
             } catch (error) {
+                console.error('Error connecting to SSE:', error);
                 logMessage(`Error connecting to SSE: ${error.message}`, true);
                 disconnectSSE();
             }
@@ -258,7 +321,11 @@
 
         function disconnectSSE() {
             if (eventSource) {
-                eventSource.close();
+                try {
+                    eventSource.close();
+                } catch (error) {
+                    console.error('Error closing EventSource:', error);
+                }
                 eventSource = null;
             }
             
@@ -278,8 +345,8 @@
         }
 
         function sendEchoMessage() {
-            if (!sessionId || !messageEndpoint) {
-                logMessage('No active session', true);
+            if (!messageEndpoint) {
+                logMessage('No message endpoint available', true);
                 return;
             }
             
@@ -301,12 +368,18 @@
                 id: `echo-${++requestId}`
             };
             
+            // Add session ID to request if available
+            if (sessionId) {
+                requestData.sessionId = sessionId;
+            }
+            
             logMessage(`Sending echo request: ${JSON.stringify(requestData)}`);
             
             fetch(messageEndpoint, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Mcp-Session-Id': sessionId || ''
                 },
                 body: JSON.stringify(requestData)
             })
@@ -320,13 +393,14 @@
                 logMessage(`Echo response: ${JSON.stringify(data)}`);
             })
             .catch(error => {
+                console.error('Error sending message:', error);
                 logMessage(`Error sending message: ${error.message}`, true);
             });
         }
 
         function sendDustQuery() {
-            if (!sessionId || !messageEndpoint) {
-                logMessage('No active session', true);
+            if (!messageEndpoint) {
+                logMessage('No message endpoint available', true);
                 return;
             }
             
@@ -348,12 +422,18 @@
                 id: `query-${++requestId}`
             };
             
+            // Add session ID to request if available
+            if (sessionId) {
+                requestData.sessionId = sessionId;
+            }
+            
             logMessage(`Sending dust query: ${JSON.stringify(requestData)}`);
             
             fetch(messageEndpoint, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json'
+                    'Content-Type': 'application/json',
+                    'Mcp-Session-Id': sessionId || ''
                 },
                 body: JSON.stringify(requestData)
             })
@@ -367,6 +447,7 @@
                 logMessage(`Query response: ${JSON.stringify(data)}`);
             })
             .catch(error => {
+                console.error('Error sending query:', error);
                 logMessage(`Error sending query: ${error.message}`, true);
             });
         }

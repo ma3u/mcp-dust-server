@@ -33,11 +33,18 @@ export class HTTPStreamTransport implements Transport {
     this.response.setHeader('Transfer-Encoding', 'chunked');
     this.response.setHeader('Connection', 'keep-alive');
     this.response.setHeader('Cache-Control', 'no-cache');
+    this.response.setHeader('Access-Control-Allow-Origin', '*');
+    this.response.setHeader('Access-Control-Allow-Headers', 'Content-Type, Mcp-Session-Id');
     
     // Set up connection close handler
     this.response.on('close', () => {
       logger.info(`HTTP Stream connection closed for path: ${this.path}`);
       this.closed = true;
+      
+      // If we have a session ID, update it when connection closes
+      if (this.sessionId) {
+        sessionManager.updateSession(this.sessionId, { transportPath: null });
+      }
     });
     
     // Start the response
@@ -49,6 +56,15 @@ export class HTTPStreamTransport implements Transport {
       if (session) {
         logger.debug(`HTTP Stream transport associated with session: ${this.sessionId}`);
         sessionManager.updateSession(this.sessionId, { transportPath: this.path });
+      } else {
+        // Create a new session if it doesn't exist
+        logger.debug(`Creating new session for HTTP Stream transport: ${this.sessionId}`);
+        const newSession = sessionManager.createSession({ transportPath: this.path });
+        // Update the session ID to match our expected ID
+        if (newSession && newSession.id !== this.sessionId) {
+          logger.debug(`Updating session ID from ${newSession.id} to ${this.sessionId}`);
+          this.sessionId = newSession.id;
+        }
       }
     }
   }
@@ -89,6 +105,11 @@ export class HTTPStreamTransport implements Transport {
     }
     
     try {
+      // Add session ID to the message if available and not already present
+      if (this.sessionId && !message.sessionId) {
+        message.sessionId = this.sessionId;
+      }
+      
       // Format the message as JSON and send as a chunk
       const messageJson = JSON.stringify(message);
       this.response.write(messageJson + '\n');
@@ -151,14 +172,30 @@ export class HTTPStreamTransport implements Transport {
     return async (req: Request, res: Response) => {
       try {
         // Extract session ID from request if available
-        const sessionId = req.header('Mcp-Session-Id');
+        const sessionId = req.header('Mcp-Session-Id') || req.mcpSessionId;
+        
+        // Log the request
+        logger.info(`HTTP Stream request received: ${req.method} ${req.path}, session: ${sessionId || 'none'}`);
+        
+        // Handle preflight OPTIONS requests
+        if (req.method === 'OPTIONS') {
+          res.setHeader('Access-Control-Allow-Origin', '*');
+          res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+          res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Mcp-Session-Id');
+          res.status(200).end();
+          return;
+        }
         
         // Create transport
         const transport = new HTTPStreamTransport(path, res, sessionId || undefined);
         
         // Process any incoming message in the request body
         if (req.body && Object.keys(req.body).length > 0) {
+          logger.debug(`Processing incoming message: ${JSON.stringify(req.body)}`);
           await transport.processMessage(req.body);
+        } else {
+          // If no message in body, just keep the connection open
+          logger.debug('No message in request body, keeping connection open');
         }
         
         // Keep the connection open for streaming
