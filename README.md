@@ -2,6 +2,28 @@
 
 This repository contains an implementation of a Model Context Protocol (MCP) server designed to interact with Dust agents. The server is separated into two main components: the MCP server (which handles Dust API interactions) and the MCP test client (which provides a web interface for testing).
 
+## Table of Contents
+
+- [Features](#features)
+- [Architecture](#architecture)
+- [Dust.tt Agentic AI](#dusttt-agentic-ai)
+- [Installation](#installation)
+  - [Prerequisites](#prerequisites)
+  - [Steps](#steps)
+- [Starting the Server and Client](#starting-the-server-and-client)
+  - [Development Mode](#development-mode)
+  - [Production Mode](#production-mode)
+  - [Expected Output](#expected-output)
+- [API Endpoints](#api-endpoints)
+- [Debugging](#debugging)
+- [Integration](#integration)
+  - [Windsurf IDE Configuration](#windsurf-ide-configuration)
+  - [Claude Desktop Integration](#claude-desktop-integration)
+- [Testing](#testing)
+- [API Overview](#api-overview)
+- [Developer Documentation](#developer-documentation)
+- [License](#license)
+
 ## Features
 
 - Separate MCP server and test client components
@@ -16,6 +38,52 @@ This repository contains an implementation of a Model Context Protocol (MCP) ser
 - Comprehensive error handling and reporting
 - Support for the latest MCP specification (2025-03-26)
 - Status endpoints for monitoring and health checks
+
+## Architecture
+
+The MCP Dust Server is built using the following components:
+
+![MCP Server Architecture Diagram](public/mcp-server-architecture.png)
+
+**Figure 1:** MCP Server Architecture showing the server and client components
+
+1. **MCP Server (server.ts)**:
+
+   - Handles MCP protocol interactions with Dust API
+   - Manages session state and context
+   - Implements the full MCP lifecycle (initialize, message, terminate)
+   - Supports both SSE and HTTP Stream Transport
+   - Provides status endpoints for monitoring
+
+2. **MCP Test Client (client.ts)**:
+   - Provides a web interface for testing
+   - Allows interaction with the MCP server
+   - Supports real-time streaming and debugging
+   - Includes session management and connection tracking
+
+## Dust.tt Agentic AI
+
+Dust.tt is a platform designed to help organizations build and deploy custom AI agents tailored to their specific needs. It integrates advanced AI models, such as GPT-4, Claude, Gemini, and Mistral, with enterprise-grade security features to streamline workflows, automate tasks, and enhance productivity across various business functions.
+
+![Dust.tt Platform Interface](public/dust-platform-screenshot.png)
+
+**Figure 2:** Screenshot of the Dust.tt platform interface showing agent capabilities
+
+**Custom AI Agents**: Personalized Agents: Create agents with custom instructions and tools, tailored to team or individual needs.
+
+**Company Context**: Integrate agents with internal tools like Notion, Slack, GitHub, or external APIs for seamless access to company data.
+
+**Multi-Agent Workflows**: Combine and chain multiple agents, each with unique capabilities, in a single workflow.
+
+**Integration with Data Sources**: Data Connections: Connect agents to data from SharePoint, Zendesk, Jira, Salesforce, Snowflake, and more.
+
+**Dynamic Querying**: Use agents to analyze spreadsheets, databases, and warehouses with natural language or SQL queries.
+
+**Real-Time Updates**: Sync company knowledge continuously for up-to-date responses.
+
+**Open Source**: Available on [GitHub](https://github.com/ma3u/mcp-dust-server) under the MIT license. With a big community of users and developers.
+
+**Hosting**: SaaS or own hosting option on your own server
 
 ## Installation
 
@@ -133,130 +201,16 @@ MCP Test Client running on http://127.0.0.1:5002
 
 ## API Endpoints
 
-The server provides several endpoints for monitoring and health checks:
+The server provides several endpoints for health checks and MCP protocol communication. For detailed API documentation, please refer to the [Developer Documentation](public/DEVELOPERS.md).
 
-### Health Check Endpoints
+Key endpoints include:
 
-- **GET /health**: Returns the server's health status
-  ```json
-  {
-    "status": "healthy",
-    "version": "1.0.0",
-    "timestamp": "2025-04-02T16:34:16.989Z",
-    "component": "MCP Server",
-    "activeSessions": 0
-  }
-  ```
+- **Health Checks**: `/health`, `/ready`, `/live`
+- **MCP Protocol**: `/sse` (Server-Sent Events), `/stream` (HTTP Stream Transport)
 
-- **GET /ready**: Indicates if the server is ready to accept connections
-  ```json
-  {
-    "status": "ready",
-    "version": "1.0.0",
-    "timestamp": "2025-04-02T16:34:16.989Z"
-  }
-  ```
+## Debugging
 
-- **GET /live**: Indicates if the server is alive
-  ```json
-  {
-    "status": "alive",
-    "uptime": 123.45,
-    "timestamp": "2025-04-02T16:34:16.989Z"
-  }
-  ```
-
-- **GET /api/v1/status**: Returns operational status and configuration details
-  ```json
-  {
-    "status": "operational",
-    "version": "1.0.0",
-    "workspace": "11453f1c9e",
-    "agent": "8x9nuWdMnR",
-    "uptime": 123.45
-  }
-  ```
-
-### MCP Protocol Endpoints
-
-- **GET /sse**: Server-Sent Events endpoint for real-time streaming
-- **POST /stream**: HTTP Stream Transport endpoint according to MCP specification
-- **POST /messages**: JSON-RPC endpoint for non-streaming MCP messages
-
-## Debugging with MCP Inspector
-
-The MCP Inspector is a powerful debugging tool that helps you visualize and troubleshoot the communication between clients and your MCP server. It acts as a proxy between clients and your server, allowing you to inspect the messages being exchanged.
-
-### Installing MCP Inspector
-
-```bash
-npm install -g @modelcontextprotocol/inspector
-```
-
-Or use it directly with npx:
-
-```bash
-npx @modelcontextprotocol/inspector
-```
-
-### Using the Inspector
-
-This repository includes a convenience script to run the MCP Inspector with the correct configuration:
-
-```bash
-./run-inspector.sh
-```
-
-This script will:
-
-1. Clean up any existing inspector processes
-2. Set the correct environment variables
-3. Start the inspector with the right configuration
-
-Once started, the MCP Inspector will be available at:
-
-- Web UI: [http://127.0.0.1:6274](http://127.0.0.1:6274)
-- Proxy Server: [http://127.0.0.1:6277](http://127.0.0.1:6277)
-
-### Connection Flow
-
-The MCP Inspector works by proxying connections between clients and your server:
-
-```text
-Client → MCP Inspector (6277) → Your MCP Server (5001)
-```
-
-### Inspector Features
-
-1. **Messages Tab**: View the JSON-RPC messages being exchanged between clients and your server
-2. **Logs Tab**: See detailed logs of the communication process
-3. **Test Tab**: Send custom messages to your server for testing
-4. **Sessions Tab**: Monitor active sessions and their state
-5. **Configuration Tab**: View and modify the inspector's configuration
-
-### Troubleshooting Common Issues
-
-1. **Server Disconnects Immediately**:
-   - Check your server's `onRequest` and `onResponse` handlers for errors
-   - Verify that your server is properly handling the initialize method
-   - Look for any uncaught exceptions in your server code
-
-2. **Connection Refused**:
-   - Ensure your server is running on port 5001
-   - Check that the SSE endpoint is accessible at [http://localhost:5001/sse](http://localhost:5001/sse)
-
-3. **Protocol Version Issues**:
-   - Make sure both your server and the inspector are using the same protocol version (2024-11-05)
-
-### Best Practices
-
-- Use the inspector during development to validate your server's compliance with the MCP specification
-- Test different message types to ensure your server handles them correctly
-- Check the response times to identify potential performance bottlenecks
-- Use the inspector to debug client-server communication issues
-- Verify that your server correctly implements the MCP lifecycle (initialize, message, terminate)
-- Add additional debug logging to your server code when troubleshooting issues
-- Check the server logs for any errors or warnings that might indicate issues
+For detailed information about debugging tools and techniques, including the MCP Inspector, please refer to the [Developer Documentation](public/DEVELOPERS.md).
 
 ## Integration
 
@@ -316,127 +270,17 @@ To integrate the Dust MCP Server with Claude Desktop, update its configuration f
 
 ## Testing
 
-### Web Client Testing
+The project includes both web-based and command-line testing tools. For detailed testing information, please refer to the [Developer Documentation](public/DEVELOPERS.md).
 
-The project includes a web-based test client accessible at `http://localhost:5002` (or your configured CLIENT_PORT) when you run the client component. This web interface allows you to:
+The web-based test client is accessible at `http://localhost:5002` when you run the client component, allowing you to interact with your Dust agent and test the MCP server functionality.
 
-![alt text](image.png)
+## API Overview
 
-1. Connect to the MCP server via SSE with automatic reconnection
-2. Send test echo messages to verify connectivity
-3. Send queries to your Dust agent and receive streaming responses
-4. View responses in real-time with detailed logging
-5. Monitor connection status with visual indicators
+The server provides several endpoints for health checks and MCP protocol communication. For detailed API documentation, please refer to the [Developer Documentation](public/DEVELOPERS.md).
 
-### Command-Line Testing
+## Developer Documentation
 
-The project includes command-line test scripts for testing different aspects of the server:
-
-1. **Dust API Test Client**:
-
-   ```bash
-   npm run test:dust-client
-   ```
-
-   Tests direct interaction with the Dust API without going through the MCP server.
-
-2. **JSON-RPC Run Method Test**:
-
-   ```bash
-   npm run test:run-method
-   ```
-
-   Tests the JSON-RPC 'run' method implementation for direct tool execution via the HTTP Stream transport.
-
-### Connection Status Indicators
-
-The test client includes visual indicators for connection status:
-
-- **Connected**: Green status indicator, all action buttons enabled
-- **Disconnected**: Red status indicator, action buttons disabled
-- **Pending**: Yellow status indicator, action buttons disabled
-
-### Heartbeat Mechanism
-
-The server implements a heartbeat mechanism that sends periodic messages to keep the SSE connection alive. This helps prevent timeouts and ensures a stable connection between the client and server.
-
-## API Documentation
-
-### MCP Server Endpoints
-
-- `GET /health` - Server health check endpoint
-- `GET /live` - Server liveness check endpoint
-- `GET /ready` - Server readiness check endpoint
-- `GET /sse` - Establish SSE connection with automatic heartbeat
-- `POST /stream` - HTTP Stream Transport endpoint for bidirectional communication
-  - Supports JSON-RPC methods: 'initialize', 'message', 'terminate', and 'run'
-  - Direct tool execution via the 'run' method
-- `GET /debug/sessions` - View active session information (development only)
-- `GET /debug/connections` - View active connection information (development only)
-
-### Transport Mechanisms
-
-The server supports two transport mechanisms:
-
-1. **SSE (Server-Sent Events)**: Used for real-time streaming from server to client
-   - Automatic reconnection on connection loss
-   - Heartbeat mechanism to prevent timeouts
-   - Session tracking for context preservation
-
-2. **HTTP Stream Transport**: Used for bidirectional communication
-   - Chunked encoding for streaming responses
-   - Session ID tracking via headers
-   - Proper CORS configuration for cross-origin requests
-
-### MCP Tools
-
-1. **echo**
-   - Description: Echoes back the provided message (for testing)
-   - Parameters: `message` (string)
-   - Access via: Tool call or direct 'run' method
-
-2. **dust-query**
-   - Description: Send a query to your Dust AI agent
-   - Parameters: `query` (string)
-   - Access via: Tool call or direct 'run' method
-
-## Development
-
-### Project Structure
-
-```text
-src/
-├── mcp-server/
-│   ├── index.ts            # MCP server entry point
-│   └── server.ts           # MCP server implementation
-├── mcp-client/
-│   └── client-server.ts    # Test client implementation
-├── utils/
-│   ├── dust-client.ts      # Dust API client wrapper
-│   ├── dust-test-client.ts # Dust API test client
-│   ├── test-run-method.ts  # JSON-RPC 'run' method test script
-│   ├── secure-logger.ts    # PII-masking secure logger
-│   ├── session-manager.ts  # Session management implementation
-│   └── http-stream-transport.ts # HTTP Stream Transport implementation
-├── index.ts               # Main entry point
-└── types/
-    └── index.ts           # TypeScript type definitions
-public/
-├── test-sse.html          # Web-based test client
-├── styles.css             # Client styles
-└── favicon.ico            # Site favicon
-dist/                      # Compiled JavaScript output
-tests/                     # Test suite
-```
-
-### Security Considerations
-
-- **API Key Protection**: API keys are masked in logs to prevent accidental exposure
-- **Session Management**: Sessions expire after inactivity to prevent resource leaks
-- **CORS Configuration**: Proper CORS headers to control cross-origin requests
-- **Input Validation**: All inputs are validated before processing
-- **Error Handling**: Comprehensive error handling to prevent information leakage
-- **Rate Limiting**: Basic rate limiting to prevent abuse
+For detailed technical information, including project structure, API documentation, debugging tools, and security considerations, please refer to the [Developer Documentation](public/DEVELOPERS.md).
 
 
 ---

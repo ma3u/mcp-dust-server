@@ -345,21 +345,59 @@ async function main() {
       // Keep the process running despite the error
     });
 
-    // Start the HTTP server with singleton enforcement
-    // Create server instance first so we can add error handlers before starting
-    serverInstance = app.listen(port, host);
-    
-    // Add error handler for port conflicts
-    serverInstance.on('error', (error: Error) => {
-      if ((error as any).code === 'EADDRINUSE') {
-        logger.error(`Port ${port} is already in use. Another instance of the server may be running.`);
-        console.error(`Port ${port} is already in use. Another instance of the server may be running.`);
-        process.exit(1);
-      } else {
-        logger.error('Server error:', error);
-        console.error('Server error:', error);
-      }
-    });
+    // Check if port is already in use before starting the server
+    try {
+      // First check if the port is already in use using a temporary server
+      const net = require('net');
+      const tempServer = net.createServer();
+      
+      // Attempt to bind to the port first to check availability
+      await new Promise<void>((resolve, reject) => {
+        tempServer.once('error', (err: any) => {
+          if (err.code === 'EADDRINUSE') {
+            logger.error(`Port ${port} is already in use. Another instance of the server may be running.`);
+            console.error(`Port ${port} is already in use. Another instance of the server may be running.`);
+            reject(new Error(`Port ${port} is already in use`));
+          } else {
+            reject(err);
+          }
+        });
+        
+        tempServer.once('listening', () => {
+          // Port is available, close the temporary server
+          tempServer.close(() => {
+            logger.info(`Port ${port} is available, starting server`);
+            resolve();
+          });
+        });
+        
+        tempServer.listen(port, host);
+      });
+      
+      // Start the HTTP server with singleton enforcement
+      // Create server instance first so we can add error handlers before starting
+      serverInstance = app.listen(port, host);
+      
+      // Add error handler for port conflicts and other server errors
+      serverInstance.on('error', (error: Error) => {
+        if ((error as any).code === 'EADDRINUSE') {
+          logger.error(`Port ${port} is already in use. Another instance of the server may be running.`);
+          console.error(`Port ${port} is already in use. Another instance of the server may be running.`);
+          // Exit with a specific error code for port conflicts
+          process.exit(2);
+        } else {
+          logger.error(`Server error: ${error.message}`, error);
+          console.error(`Server error: ${error.message}`, error);
+          // Exit with a general error code
+          process.exit(1);
+        }
+      });
+    } catch (error: any) {
+      // Handle errors from the port check
+      logger.error(`Failed to start server: ${error.message}`);
+      console.error(`Failed to start server: ${error.message}`);
+      process.exit(1);
+    }
     
     // Set up success handler
     serverInstance.on('listening', () => {
