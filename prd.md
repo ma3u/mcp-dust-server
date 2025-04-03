@@ -43,90 +43,90 @@ This project aims to create a bridge between the Model Context Protocol (MCP) an
 
 The project is tracked in Jira under the P4XAI project key. The following integration points are established:
 
-• **Issue Types**: Epic, Story, Task, Bug, Subtask
-• **Workflow**: Standard Jira workflow (To Do → In Progress → Done)
-• **Epics**: Each project phase mapped to a dedicated epic
-• **Sprints**: Two-week sprint cycles aligned with project milestones
-• **Dashboards**: Custom dashboard for MCP server development progress
-• **Automation**: Automatic transitions based on PR status in GitHub
-• **Reporting**: Burndown charts and velocity tracking
+- **Issue Types**: Epic, Story, Task, Bug, Subtask
+- **Workflow**: Standard Jira workflow (To Do → In Progress → Done)
+- **Epics**: Each project phase mapped to a dedicated epic
+- **Sprints**: Two-week sprint cycles aligned with project milestones
+- **Dashboards**: Custom dashboard for MCP server development progress
+- **Automation**: Automatic transitions based on PR status in GitHub
+- **Reporting**: Burndown charts and velocity tracking
 
 ### GitHub Integration
 
 The project is hosted on GitHub under the Ma3u account. The following GitHub features are utilized:
 
-• **Repository**: ma3u/mcp-dust-server
-• **Branch Strategy**: GitHub Flow (feature branches → main)
-• **Protection Rules**: Required reviews and passing CI checks before merging
-• **Actions**: Automated workflows for testing, building, and deploying
-• **Issues**: Synchronized with Jira for task tracking
-• **Pull Requests**: Templates with required information and linked issues
-• **Releases**: Tagged releases with semantic versioning
-• **Pages**: Hosting API documentation and user guides
+- **Repository**: ma3u/mcp-dust-server
+- **Branch Strategy**: GitHub Flow (feature branches → main)
+- **Protection Rules**: Required reviews and passing CI checks before merging
+- **Actions**: Automated workflows for testing, building, and deploying
+- **Issues**: Synchronized with Jira for task tracking
+- **Pull Requests**: Templates with required information and linked issues
+- **Releases**: Tagged releases with semantic versioning
+- **Pages**: Hosting API documentation and user guides
 
 ### Global Windsurf Configuration
 
-• GitHub integration with Ma3u account
-• Jira integration with P4XAI project
-• Confluence documentation access
-• Code quality and linting rules enforcement
-• Automated testing on commit/PR
+- GitHub integration with Ma3u account
+- Jira integration with P4XAI project
+- Confluence documentation access
+- Code quality and linting rules enforcement
+- Automated testing on commit/PR
 
 ### Project-Specific Windsurf Configuration
 
-• Repository: ma3u/mcp-dust-server
-• Issue tracking: P4XAI Jira board
-• Pull request templates with required reviewers
-• Branch protection rules for main branch
-• Continuous integration with GitHub Actions
-• Deployment pipeline to staging/production environments
+- Repository: ma3u/mcp-dust-server
+- Issue tracking: P4XAI Jira board
+- Pull request templates with required reviewers
+- Branch protection rules for main branch
+- Continuous integration with GitHub Actions
+- Deployment pipeline to staging/production environments
 
 ## Phase 1: Project Setup  
 
 1. **Repository Update**
 
-   • Use the existing repo and project structure
-   • Use the tsconfig.json and the existing .env file and example
-   • Configure TypeScript (strict mode + ESM modules)
-   • Add essential dependencies: MCP SDK, Dust SDK, Zod
+   - Use the existing repo and project structure
+   - Use the tsconfig.json and the existing .env file and example
+   - Configure TypeScript (strict mode + ESM modules)
+   - Add essential dependencies: MCP SDK, Dust SDK, Zod
 
 ## Phase 2: Core Server Implementation  
 
 1. **MCP Server Foundation**
 
-   • Initialize MCP server with env configuration
-   • Implement base resource routes
-   • Configure SSE transport layer
+   - Initialize MCP server with env configuration
+   - Implement base resource routes
+   - Configure SSE transport layer
 
 2. **Session Management**
 
-   • Session ID generation service
-   • Context storage (Redis integration plan)
-   • Automatic session expiration
+   - Session ID generation service
+   - Context storage (Redis integration plan)
+   - Automatic session expiration
 
 ## Phase 3: Real-Time Features  
 
 1. **Event Streaming**
-   • SSE heartbeat mechanism
-   • Chunked response handling
-   • Connection timeout management
+   - SSE heartbeat mechanism
+   - Chunked response handling
+   - Connection timeout management
 
 2. **Dust Integration**
-   • Agent configuration loader
-   • Stream parsing adapter
-   • Error propagation handling
+   - Agent configuration loader
+   - Stream parsing adapter
+   - Error propagation handling
 
 ## Phase 4: File Handling  
 
 1. **Upload System**
-   • Temporary file storage service
-   • MIME type validation
-   • Automatic cleanup scheduler
+   - Temporary file storage service
+   - MIME type validation
+   - Automatic cleanup scheduler
 
 2. **Attachment Processing**
-   • File chunking for large uploads
-   • Virus scanning integration
-   • Metadata extraction
+   - File chunking for large uploads
+   - Virus scanning integration
+   - Metadata extraction
 
 ## Phase 5: Security Implementation  
 
