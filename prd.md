@@ -72,18 +72,6 @@ The project is hosted on GitHub under the Ma3u account. The following GitHub fea
 • Code quality and linting rules enforcement
 • Automated testing on commit/PR
 
-### Confluence Documentation Integration
-
-Project documentation is maintained in Confluence and integrated with the development workflow:
-
-• **Space**: Dedicated space for MCP Dust Server documentation
-• **Structure**: Hierarchical organization mirroring project phases
-• **Templates**: Standardized templates for different document types
-• **Integration**: Links between Jira issues and relevant documentation
-• **Automation**: Automatic updates of API documentation
-• **Versioning**: Documentation versions aligned with software releases
-• **Access Control**: Role-based access for different stakeholders
-
 ### Project-Specific Windsurf Configuration
 
 • Repository: ma3u/mcp-dust-server
@@ -94,24 +82,30 @@ Project documentation is maintained in Confluence and integrated with the develo
 • Deployment pipeline to staging/production environments
 
 ## Phase 1: Project Setup  
+
 1. **Repository Update**
-   • Use the existing repo and project structure 
+
+   • Use the existing repo and project structure
    • Use the tsconfig.json and the existing .env file and example
    • Configure TypeScript (strict mode + ESM modules)
    • Add essential dependencies: MCP SDK, Dust SDK, Zod
 
 ## Phase 2: Core Server Implementation  
+
 1. **MCP Server Foundation**
+
    • Initialize MCP server with env configuration
    • Implement base resource routes
    • Configure SSE transport layer
 
 2. **Session Management**
+
    • Session ID generation service
    • Context storage (Redis integration plan)
    • Automatic session expiration
 
 ## Phase 3: Real-Time Features  
+
 1. **Event Streaming**
    • SSE heartbeat mechanism
    • Chunked response handling
@@ -123,6 +117,7 @@ Project documentation is maintained in Confluence and integrated with the develo
    • Error propagation handling
 
 ## Phase 4: File Handling  
+
 1. **Upload System**
    • Temporary file storage service
    • MIME type validation
@@ -134,6 +129,7 @@ Project documentation is maintained in Confluence and integrated with the develo
    • Metadata extraction
 
 ## Phase 5: Security Implementation  
+
 1. **Data Protection**
    • Secret masking in logs
    • Input validation schemas
@@ -145,6 +141,7 @@ Project documentation is maintained in Confluence and integrated with the develo
    • Audit logging
 
 ## Phase 6: Testing & Validation  
+
 1. **Test Suite**
    • MCP compliance tests
    • Load testing (Artillery)
@@ -156,6 +153,7 @@ Project documentation is maintained in Confluence and integrated with the develo
    • Session isolation verification
 
 ## Phase 7: Documentation  
+
 1. **Developer Docs**
    • API reference (OpenAPI spec)
    • Architecture diagrams
@@ -166,7 +164,8 @@ Project documentation is maintained in Confluence and integrated with the develo
    • Troubleshooting matrix
    • Service status API
 
-## Phase 8: Deployment   
+## Phase 8: Deployment
+
 1. **Packaging**
    • Production Docker image
    • Helm charts
