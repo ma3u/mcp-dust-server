@@ -119,7 +119,7 @@ Dust.tt is a platform designed to help organizations build and deploy custom AI 
    
    # MCP Test Client Configuration
    CLIENT_HOST=127.0.0.1
-   CLIENT_PORT=5002
+   CLIENT_PORT=6001
    
    # Dust API Configuration
    DUST_API_KEY=your_dust_api_key_here
@@ -194,7 +194,7 @@ Dust agent: your_agent_id
 **For the Test Client**:
 
 ```text
-MCP Test Client running on http://127.0.0.1:5002
+MCP Test Client running on http://127.0.0.1:6001
 ```
 
 ---
@@ -272,7 +272,7 @@ To integrate the Dust MCP Server with Claude Desktop, update its configuration f
 
 The project includes both web-based and command-line testing tools. For detailed testing information, please refer to the [Developer Documentation](public/DEVELOPERS.md).
 
-The web-based test client is accessible at `http://localhost:5002` when you run the client component, allowing you to interact with your Dust agent and test the MCP server functionality.
+The web-based test client is accessible at `http://localhost:6001` when you run the client component, allowing you to interact with your Dust agent and test the MCP server functionality.
 
 ## API Overview
 

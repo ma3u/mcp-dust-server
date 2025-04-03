@@ -61,7 +61,7 @@ export const startClientServer = async () => {
     
     // Use client configuration from .env
     const host = process.env.CLIENT_HOST || '0.0.0.0';
-    const port = parseInt(process.env.CLIENT_PORT || '5002', 10);
+    const port = parseInt(process.env.CLIENT_PORT || '6001', 10);
     
     // Start the HTTP server
     server.listen(port, host, () => {

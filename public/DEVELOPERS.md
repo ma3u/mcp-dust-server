@@ -239,7 +239,7 @@ Client → MCP Inspector (6277) → Your MCP Server (5001)
 
 ### Web Client Testing
 
-The project includes a web-based test client accessible at `http://localhost:5002` (or your configured CLIENT_PORT) when you run the client component. This web interface allows you to:
+The project includes a web-based test client accessible at `http://localhost:6001` (or your configured CLIENT_PORT) when you run the client component. This web interface allows you to:
 
 1. Connect to the MCP server via SSE with automatic reconnection
 2. Send test echo messages to verify connectivity
