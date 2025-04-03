@@ -5,6 +5,7 @@ This document contains technical information for developers working with the MCP
 ## Table of Contents
 
 - [Project Structure](#project-structure)
+- [Project Progress](#project-progress)
 - [API Endpoints](#api-endpoints)
   - [MCP Server Endpoints](#mcp-server-endpoints)
   - [Health Check Endpoints](#health-check-endpoints)
@@ -24,6 +25,21 @@ This document contains technical information for developers working with the MCP
   - [Connection Status Indicators](#connection-status-indicators)
   - [Heartbeat Mechanism](#heartbeat-mechanism)
 - [Security Considerations](#security-considerations)
+
+## Project Progress
+
+The MCP Dust Server is under active development. You can track the progress and upcoming features in the following documents:
+
+- [Project Plan](../prd.md) - Detailed project phases and roadmap
+- [Todo List](../todo.md) - Prioritized task list with completion status
+
+The project is organized into several phases:
+
+1. **Project Setup** - Repository configuration, CI/CD pipeline
+2. **Core Server Implementation** - MCP server foundation, session management
+3. **Dust Integration** - Agent communication, tool mapping
+4. **Transport Layer** - SSE implementation, HTTP streaming
+5. **Testing & Security** - Compliance tests, rate limiting, error handling
 
 ## Project Structure
 
