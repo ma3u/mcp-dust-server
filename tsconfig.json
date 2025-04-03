@@ -13,6 +13,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
+    "allowSyntheticDefaultImports": true,
     "paths": {
       "https://esm.sh/lodash": ["./node_modules/@types/lodash/index.d.ts"],
       "https://esm.sh/lodash@*": ["./node_modules/@types/lodash/index.d.ts"],

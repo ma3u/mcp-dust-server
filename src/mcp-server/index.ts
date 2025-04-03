@@ -8,6 +8,10 @@ import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
 import { HTTPStreamTransport } from "../utils/http-stream-transport.js";
 import { createSessionMiddleware, sessionActivityMiddleware } from "../middleware/session-middleware.js";
 import rateLimit from 'express-rate-limit';
+import { findAvailablePort } from '../utils/portManager.js';
+import { getServiceRegistry } from '../utils/registry-factory.js';
+import { defaultConfig, getInstanceId, getServerName } from '../config/instance-config.js';
+import { v4 as uuidv4 } from 'uuid';
 
 // Load environment variables
 dotenv.config();
@@ -82,12 +86,22 @@ async function main() {
   try {
     // Check if server is already running
     if (serverInstance) {
-      logger.error('Server already running on port 5001');
+      logger.error('Server already running');
       return;
     }
+    
+    // Get the instance ID for this server
+    const instanceId = getInstanceId();
+    logger.info(`Starting MCP server instance ${instanceId}`);
+    
+    // Get the service registry
+    const serviceRegistry = await getServiceRegistry();
+    
+    // Find an available port dynamically using the configured port range
+    const port = await findAvailablePort(defaultConfig.portConfig);
+    
     // Use MCP configuration from .env
     const host = process.env.MCP_HOST || '0.0.0.0';
-    const port = parseInt(process.env.MCP_PORT || '5001', 10);
     
     // Add route for server health check
     app.get('/health', (req, res) => {
@@ -125,8 +139,33 @@ async function main() {
         version: process.env.npm_package_version,
         workspace: process.env.DUST_WORKSPACE_ID,
         agent: process.env.DUST_AGENT_ID,
-        uptime: process.uptime()
+        uptime: process.uptime(),
+        instanceId: instanceId,
+        port: port
       });
+    });
+    
+    // Add route for instance information
+    app.get('/api/v1/instance', async (req, res) => {
+      try {
+        const instances = await serviceRegistry.getActiveInstances();
+        res.json({
+          currentInstance: {
+            id: instanceId,
+            port: port,
+            uptime: process.uptime(),
+            startTime: new Date(Date.now() - (process.uptime() * 1000)).toISOString()
+          },
+          activeInstances: Array.from(instances.entries()).map(([id, p]) => ({
+            id,
+            port: p,
+            isCurrent: id === instanceId
+          }))
+        });
+      } catch (error) {
+        logger.error('Error retrieving instance information:', error);
+        res.status(500).json({ error: 'Failed to retrieve instance information' });
+      }
     });
     
     // Configure SSE endpoint
@@ -411,7 +450,7 @@ async function main() {
       logger.info(`Dust agent: ${process.env.DUST_AGENT_ID || "(not configured)"}`);
       
       // Log to console for Claude logs
-      console.error('Server started on port 5001');
+      console.error(`Server instance ${instanceId} started on port ${port}`);
     });
     
     // Error handler already added before server start
@@ -424,10 +463,19 @@ async function main() {
       logger.warn('setupExpressHandlers not available, using fallback shutdown handlers');
       
       // Fallback graceful shutdown handler
-      const gracefulShutdown = () => {
-        logger.info("Shutting down MCP server...");
+      const gracefulShutdown = async () => {
+        logger.info(`Shutting down MCP server instance ${instanceId}...`);
+        
+        try {
+          // Deregister this instance from the service registry
+          await serviceRegistry.deregisterInstance(instanceId);
+          logger.info(`Instance ${instanceId} deregistered from service registry`);
+        } catch (error) {
+          logger.error(`Failed to deregister instance ${instanceId}:`, error);
+        }
+        
         serverInstance.close(() => {
-          logger.info('Server closed');
+          logger.info(`Server instance ${instanceId} closed`);
           process.exit(0);
         });
 

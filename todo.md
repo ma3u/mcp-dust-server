@@ -20,7 +20,8 @@
 - [x] [P1] Develop context validation schema   
 - [x] [P1] Create Dust API test client
 - [x] [P0] Implement direct tool execution via 'run' method
-
+- [ ] [P1] implement a multi-instance MCP Server with dynamic port negotiation (Static Range + Hybrid System)
+  
 ## Testing & Security
 
 - [x] [P0] Write MCP compliance tests (Use the latest MCP spec)

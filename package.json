@@ -9,9 +9,11 @@
     "start:server": "cross-env NODE_ENV=production node dist/index.js",
     "start:client": "cross-env START_MODE=client node dist/index.js",
     "start:both": "cross-env START_MODE=both node dist/index.js",
-    "dev": "ts-node-esm src/index.ts",
-    "dev:server": "cross-env START_MODE=server ts-node-esm src/index.ts",
-    "dev:client": "cross-env START_MODE=client ts-node-esm src/index.ts",
+    "start:multi": "node scripts/start-multi-instance.js",
+    "dev": "cross-env NODE_OPTIONS='--loader ts-node/esm' node src/index.ts",
+    "dev:server": "cross-env START_MODE=server NODE_OPTIONS='--loader ts-node/esm' node src/index.ts",
+    "dev:client": "cross-env START_MODE=client NODE_OPTIONS='--loader ts-node/esm' node src/index.ts",
+    "dev:multi": "node scripts/dev-server.js",
     "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config=jest.config.mjs",
     "test:dust-client": "node dist/utils/dust-test-client.js",
     "test:run-method": "node dist/utils/test-run-method.js",
@@ -29,10 +31,12 @@
     "@tsconfig/node23": "^23.0.1",
     "@types/eventsource": "^1.1.15",
     "@types/express": "^4.17.21",
+    "@types/ioredis": "^4.28.10",
     "@types/jest": "^29.5.14",
     "@types/lodash": "^4.17.16",
     "@types/lodash-es": "^4.17.12",
     "@types/node": "^22.13.14",
+    "@types/uuid": "^9.0.8",
     "eslint": "^8.57.0",
     "jest": "^29.7.0",
     "ts-jest": "^29.3.1",
@@ -48,6 +52,8 @@
     "eventsource": "^3.0.6",
     "express": "^4.18.3",
     "express-rate-limit": "^7.2.0",
-    "node-fetch": "^3.3.2"
+    "ioredis": "^5.6.0",
+    "node-fetch": "^3.3.2",
+    "uuid": "^9.0.1"
   }
 }
