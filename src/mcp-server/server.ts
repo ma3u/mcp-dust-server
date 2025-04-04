@@ -291,51 +291,83 @@ export const createMcpServer = () => {
     // Special handling for initialize method
     if (message.method === 'initialize') {
       logger.info('Handling initialize method');
+      console.error('Initialize request received:', JSON.stringify(message, null, 2));
       
-      // Validate the initialize request
-      const validation = validateInitializeRequest(message);
-      if (!validation.success) {
-        logger.warn(`Invalid initialize request: ${JSON.stringify(validation.error?.errors)}`);
-        const errorResponse = {
+      try {
+        // Validate the initialize request
+        const validation = validateInitializeRequest(message);
+        if (!validation.success) {
+          logger.warn(`Invalid initialize request: ${JSON.stringify(validation.error?.errors)}`);
+          const errorResponse = {
+            jsonrpc: '2.0',
+            error: {
+              code: -32602,
+              message: 'Invalid params for initialize method'
+            },
+            id: message.id
+          };
+          
+          // If transport is provided, send the response directly
+          if (transport && typeof transport.send === 'function') {
+            await transport.send(errorResponse);
+          }
+          
+          return errorResponse;
+        }
+        
+        // Create a properly formatted initialize response according to MCP spec
+        const response = {
           jsonrpc: '2.0',
-          error: {
-            code: -32602,
-            message: 'Invalid params for initialize method'
+          result: {
+            protocolVersion: '2024-11-05',
+            serverInfo: {
+              name: process.env.MCP_NAME || "Dust MCP Bridge",
+              version: '1.0.0'
+            },
+            capabilities: {}
           },
           id: message.id
         };
         
+        // Always send the response immediately to prevent timeout
+        logger.info(`Sending initialize response: ${JSON.stringify(response)}`);
+        console.error('Sending initialize response:', JSON.stringify(response, null, 2));
+        
         // If transport is provided, send the response directly
+        if (transport && typeof transport.send === 'function') {
+          await transport.send(response);
+        } else {
+          // If no transport is provided, try to use the internal response mechanism
+          logger.warn('No transport provided for initialize response, using fallback');
+          // Call the original handler to ensure proper response routing
+          return originalHandleMessage.call(this, message, transport);
+        }
+        
+        return response;
+      } catch (error) {
+        logger.error(`Error handling initialize request: ${error}`);
+        console.error('Error handling initialize request:', error);
+        
+        // Ensure we still send a response even if there's an error
+        const errorResponse = {
+          jsonrpc: '2.0',
+          result: {
+            protocolVersion: '2024-11-05',
+            serverInfo: {
+              name: process.env.MCP_NAME || "Dust MCP Bridge",
+              version: '1.0.0'
+            },
+            capabilities: {}
+          },
+          id: message.id
+        };
+        
         if (transport && typeof transport.send === 'function') {
           await transport.send(errorResponse);
         }
         
         return errorResponse;
       }
-      
-      // Create a properly formatted initialize response according to MCP spec
-      const response = {
-        jsonrpc: '2.0',
-        result: {
-          protocolVersion: '2024-11-05',
-          serverInfo: {
-            name: process.env.MCP_NAME || "Dust MCP Bridge",
-            version: '1.0.0'
-          },
-          capabilities: {}
-        },
-        id: message.id
-      };
-      
-      // If transport is provided, send the response directly
-      if (transport && typeof transport.send === 'function') {
-        logger.info(`Sending initialize response directly via transport: ${JSON.stringify(response)}`);
-        await transport.send(response);
-      } else {
-        logger.warn('No transport provided for initialize response');
-      }
-      
-      return response;
     }
     
     // For other methods, use the original handler
