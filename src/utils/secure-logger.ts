@@ -45,9 +45,12 @@ export class SecureLogger {
     // Set up log file path (default to project's logs directory)
     // Ensure we're using a relative path within the project
     const projectRoot = process.cwd();
+    // Use LOGS_DIR environment variable if available, otherwise default to 'logs'
+    const logsDir = process.env.LOGS_DIR || 'logs';
+    
     this.logFilePath = options.logFilePath || path.resolve(
       projectRoot, 
-      'logs',
+      logsDir,
       'mcp-server.log'
     );
     
