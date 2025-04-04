@@ -70,7 +70,8 @@ async function main() {
   try {
     // Use MCP configuration from .env
     const host = process.env.MCP_HOST || '0.0.0.0';
-    const port = parseInt(process.env.MCP_PORT || '5001', 10);
+    let port = parseInt(process.env.MCP_PORT || '5001', 10);
+    const maxPortRetries = 5; // Try up to 5 alternative ports
     
     // Add route for server health check
     app.get('/health', (req, res) => {
@@ -278,20 +279,44 @@ async function main() {
       // Keep the process running despite the error
     });
 
-    // Start the HTTP server
-    const server = app.listen(port, host, () => {
-      logger.info(`MCP Server running on http://${host}:${port}`);
-      logger.info(`Server name: ${process.env.MCP_NAME || "Dust MCP Bridge"}`);
-      logger.info(`Protocol version: 2024-11-05`);
-      logger.info(`Transports: SSEServerTransport, HTTPStreamTransport`);
-      logger.info(`Session management: Enabled`);
-      logger.info(`Rate limiting: Enabled (100 requests per 15 minutes)`);
-      logger.info(`Dust workspace: ${process.env.DUST_WORKSPACE_ID || "(not configured)"}`);
-      logger.info(`Dust agent: ${process.env.DUST_AGENT_ID || "(not configured)"}`);
-    });
+    // Function to try starting the server with port fallback
+    const startServer = async (currentPort: number, retryCount = 0, maxRetries = 5): Promise<any> => {
+      return new Promise((resolve, reject) => {
+        try {
+          const serverInstance = app.listen(currentPort, host, () => {
+            logger.info(`MCP Server running on http://${host}:${currentPort}`);
+            logger.info(`Server name: ${process.env.MCP_NAME || "Dust MCP Bridge"}`);
+            logger.info(`Protocol version: 2024-11-05`);
+            logger.info(`Transports: SSEServerTransport, HTTPStreamTransport`);
+            logger.info(`Session management: Enabled`);
+            logger.info(`Rate limiting: Enabled (100 requests per 15 minutes)`);
+            logger.info(`Dust workspace: ${process.env.DUST_WORKSPACE_ID || "(not configured)"}`);
+            logger.info(`Dust agent: ${process.env.DUST_AGENT_ID || "(not configured)"}`); 
+            resolve(serverInstance);
+          });
+
+          serverInstance.on('error', (err: any) => {
+            if (err.code === 'EADDRINUSE' && retryCount < maxRetries) {
+              // Port is in use, try the next port
+              const nextPort = currentPort + 1;
+              logger.warn(`Port ${currentPort} is already in use, trying port ${nextPort}`);
+              serverInstance.close();
+              resolve(startServer(nextPort, retryCount + 1, maxRetries));
+            } else {
+              reject(err);
+            }
+          });
+        } catch (error) {
+          reject(error);
+        }
+      });
+    };
+
+    // Start the HTTP server with port fallback
+    const server = await startServer(port);
     
-    // Add error handling for the server
-    server.on('error', (error) => {
+    // Add error handling for the server (for errors after successful startup)
+    server.on('error', (error: any) => {
       logger.error('Server error:', error);
     });
 

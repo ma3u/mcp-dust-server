@@ -1,4 +1,22 @@
-// src/mcp-server/server.ts
+/**
+ * @fileoverview MCP Server Implementation for Dust API Integration
+ * 
+ * This file implements a Model Context Protocol (MCP) server that bridges
+ * client applications with the Dust AI platform. It handles protocol-compliant
+ * communication, request validation, tool registration, and message routing.
+ * 
+ * The server supports both SSE and HTTP Stream transports as defined in the
+ * MCP specification (version 2024-11-05).
+ * 
+ * @see https://spec.modelcontextprotocol.io/specification/2024-11-05/
+ * @see https://github.com/modelcontextprotocol/typescript-sdk
+ * @see https://github.com/dust-tt/dust-sdk-js
+ * 
+ * @author Ma3u
+ * @project P4XAI
+ * @jira P4XAI-1
+ */
+
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import * as dotenv from 'dotenv';
@@ -11,7 +29,19 @@ import crypto from 'crypto';
 // Load environment variables
 dotenv.config();
 
-// Create an MCP server with secure request and response logging
+/**
+ * Creates and configures a new MCP server instance with Dust API integration.
+ * 
+ * This factory function sets up a complete MCP server with:
+ * - Request and response logging with PII masking
+ * - Protocol-compliant message validation
+ * - Conversation history tracking
+ * - Custom tool implementations for Dust API
+ * - Support for both SSE and HTTP Stream transports
+ * - Error handling and graceful degradation
+ * 
+ * @returns {McpServer} A configured MCP server instance ready to connect to transports
+ */
 export const createMcpServer = () => {
   // Log server configuration for debugging
   logger.info('Server configuration:', {
@@ -20,10 +50,20 @@ export const createMcpServer = () => {
     dustAgent: process.env.DUST_AGENT_ID
   });
 
+  /**
+   * Create the core MCP server instance with event handlers
+   * @type {McpServer}
+   */
   const mcpServer = new McpServer({ 
     name: process.env.MCP_NAME || "Dust MCP Bridge", 
     version: "1.0.0",
     protocolVersion: "2024-11-05",
+    /**
+     * Request handler for incoming MCP messages
+     * Validates requests and maintains conversation history
+     * 
+     * @param {any} request - The incoming MCP request object
+     */
     onRequest: (request: any) => {
       logger.logRequest(request);
       logger.debug('Received message:', JSON.stringify(request));
@@ -88,7 +128,10 @@ export const createMcpServer = () => {
     }
   });
 
-  // Register the echo tool for testing
+  /**
+   * Register the echo tool for testing MCP functionality
+   * This simple tool echoes back any message sent to it
+   */
   mcpServer.tool("echo", { 
     message: z.string().describe("Message to echo back")
   }, async ({ message }) => {
@@ -96,7 +139,10 @@ export const createMcpServer = () => {
     return { content: [{ type: "text", text: `Echo: ${message}` }] };
   });
 
-  // Query Dust AI agent
+  /**
+   * Register the dust-query tool for interacting with Dust AI
+   * This tool forwards queries to the configured Dust agent and returns responses
+   */
   mcpServer.tool("dust-query", {
     query: z.string().describe("Your question or request for the AI agent")
   }, async ({ query }) => {
@@ -211,7 +257,11 @@ export const createMcpServer = () => {
 
   // Add more tools as needed
 
-  // Override the initialize method handler to ensure proper response
+  /**
+   * Override the initialize method handler to ensure proper response
+   * This customization ensures initialize requests are handled according to the MCP spec
+   * and provides better error handling for protocol compliance
+   */
   const originalHandleMessage = (mcpServer as any).handleMessage;
   (mcpServer as any).handleMessage = async function(message: any, transport?: any) {
     logger.debug(`Custom message handler received: ${JSON.stringify(message)}`);
@@ -270,7 +320,11 @@ export const createMcpServer = () => {
     return originalHandleMessage.call(this, message, transport);
   };
 
-  // Expose the internal connect method to handle direct message processing
+  /**
+   * Expose the internal connect method to handle direct message processing
+   * This customization allows for special handling of initialize messages
+   * and better transport management
+   */
   const originalConnect = mcpServer.connect.bind(mcpServer);
   mcpServer.connect = async function(transport: any) {
     logger.info(`Connecting transport: ${transport.constructor.name}`);
@@ -293,7 +347,15 @@ export const createMcpServer = () => {
     return originalConnect(transport);
   };
   
-  // Create a handler for HTTP Stream messages according to MCP specification
+  /**
+   * Create a handler for HTTP Stream messages according to MCP specification
+   * This handler processes JSON-RPC messages sent via HTTP POST requests
+   * and returns appropriate responses according to the MCP spec
+   * 
+   * @param {any} message - The JSON-RPC message to process
+   * @param {string} sessionId - The session ID associated with the request
+   * @returns {Promise<any>} A JSON-RPC response object
+   */
   const handleHttpStreamMessage = async (message: any, sessionId: string) => {
     try {
       logger.debug(`Processing HTTP Stream message: ${JSON.stringify(message)}`);
@@ -621,11 +683,18 @@ export const createMcpServer = () => {
     }
   };
 
-  // Register the HTTP Stream message handler with the MCP server
-  // This is a custom extension to the McpServer class to handle HTTP Stream messages
+  /**
+   * Register the HTTP Stream message handler with the MCP server
+   * This is a custom extension to the McpServer class to handle HTTP Stream messages
+   * according to the MCP specification
+   */
   (mcpServer as any).handleHttpStreamMessage = handleHttpStreamMessage;
 
   return mcpServer;
 };
 
+/**
+ * Default export of the MCP server factory function
+ * @default
+ */
 export default createMcpServer;
