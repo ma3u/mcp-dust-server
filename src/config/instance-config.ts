@@ -21,18 +21,6 @@ export interface MultiInstanceConfig {
   portConfig: PortManagerConfig;
   
   /**
-   * Whether to use Redis for service registry in production
-   * If false, will use in-memory registry
-   */
-  useRedisRegistry: boolean;
-  
-  /**
-   * Redis connection string for service registry
-   * Only used if useRedisRegistry is true
-   */
-  redisUrl?: string;
-  
-  /**
    * TTL for instance registration in seconds
    */
   instanceTtl: number;
@@ -52,8 +40,6 @@ export const defaultConfig: MultiInstanceConfig = {
     maxPort: parseInt(process.env.MCP_MAX_PORT || '5050', 10),
     preferredPort: parseInt(process.env.MCP_PORT || '5001', 10)
   },
-  useRedisRegistry: process.env.USE_REDIS_REGISTRY === 'true',
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
   instanceTtl: parseInt(process.env.INSTANCE_TTL || '60', 10),
   serverNamePrefix: process.env.SERVER_NAME_PREFIX || 'Dust MCP Bridge'
 };
