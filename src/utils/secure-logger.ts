@@ -43,8 +43,10 @@ export class SecureLogger {
     this.minLevel = options.minLevel || LogLevel.INFO;
     
     // Set up log file path (default to project's logs directory)
+    // Ensure we're using a relative path within the project
+    const projectRoot = process.cwd();
     this.logFilePath = options.logFilePath || path.resolve(
-      process.cwd(), 
+      projectRoot, 
       'logs',
       'mcp-server.log'
     );
@@ -59,7 +61,7 @@ export class SecureLogger {
       } catch (err) {
         console.error(`Error creating log directory: ${err}`);
         // Fallback to a directory we know exists
-        this.logFilePath = path.join(process.cwd(), 'mcp-server.log');
+        this.logFilePath = path.join(projectRoot, 'mcp-server.log');
         console.error(`Falling back to log file: ${this.logFilePath}`);
       }
     }
