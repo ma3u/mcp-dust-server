@@ -1,10 +1,8 @@
 // src/index.ts
-// Debug information for server initialization
-console.error('Process environment:', process.env);
-console.error('Resolved node path:', process.execPath);
-console.error('Current working directory:', process.cwd());
-console.error('Node version:', process.version);
-console.error('Command line arguments:', process.argv);
+// Redirect all standard logging to stderr for Claude Desktop compatibility
+// This ensures only JSON-RPC messages go to stdout
+console.log = console.error;
+process.stdout.write = process.stderr.write.bind(process.stderr);
 
 import * as dotenv from 'dotenv';
 import { logger } from "./utils/secure-logger.js";

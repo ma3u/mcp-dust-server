@@ -384,76 +384,59 @@ async function main() {
       // Keep the process running despite the error
     });
 
-    // Check if port is already in use before starting the server
-    try {
-      // First check if the port is already in use using a temporary server
-      const net = require('net');
-      const tempServer = net.createServer();
-      
-      // Attempt to bind to the port first to check availability
-      await new Promise<void>((resolve, reject) => {
-        tempServer.once('error', (err: any) => {
-          if (err.code === 'EADDRINUSE') {
-            logger.error(`Port ${port} is already in use. Another instance of the server may be running.`);
-            console.error(`Port ${port} is already in use. Another instance of the server may be running.`);
-            reject(new Error(`Port ${port} is already in use`));
-          } else {
-            reject(err);
-          }
-        });
-        
-        tempServer.once('listening', () => {
-          // Port is available, close the temporary server
-          tempServer.close(() => {
-            logger.info(`Port ${port} is available, starting server`);
-            resolve();
+    // Function to try starting the server with port fallback
+    const startServer = async (currentPort: number, retryCount = 0, maxRetries = 5): Promise<any> => {
+      return new Promise((resolve, reject) => {
+        try {
+          const instance = app.listen(currentPort, host, () => {
+            logger.info(`MCP Server running on http://${host}:${currentPort}`);
+            logger.info(`Server name: ${process.env.MCP_NAME || "Dust MCP Bridge"}`);
+            logger.info(`Protocol version: 2024-11-05`);
+            logger.info(`Transports: SSEServerTransport, HTTPStreamTransport`);
+            logger.info(`Session management: Enabled`);
+            logger.info(`Rate limiting: Enabled (100 requests per 15 minutes)`);
+            logger.info(`Dust workspace: ${process.env.DUST_WORKSPACE_ID || "(not configured)"}`);
+            logger.info(`Dust agent: ${process.env.DUST_AGENT_ID || "(not configured)"}`); 
+            
+            // Register this instance with the service registry
+            serviceRegistry.registerInstance(instanceId, currentPort)
+              .then(() => {
+                logger.info(`Instance ${instanceId} registered with service registry on port ${currentPort}`);
+              })
+              .catch(err => {
+                logger.error(`Failed to register instance ${instanceId} with service registry:`, err);
+              });
+            
+            // Log to console for Claude logs
+            console.error(`Server instance ${instanceId} started on port ${currentPort}`);
+            
+            resolve(instance);
           });
-        });
-        
-        tempServer.listen(port, host);
-      });
-      
-      // Start the HTTP server with singleton enforcement
-      // Create server instance first so we can add error handlers before starting
-      serverInstance = app.listen(port, host);
-      
-      // Add error handler for port conflicts and other server errors
-      serverInstance.on('error', (error: Error) => {
-        if ((error as any).code === 'EADDRINUSE') {
-          logger.error(`Port ${port} is already in use. Another instance of the server may be running.`);
-          console.error(`Port ${port} is already in use. Another instance of the server may be running.`);
-          // Exit with a specific error code for port conflicts
-          process.exit(2);
-        } else {
-          logger.error(`Server error: ${error.message}`, error);
-          console.error(`Server error: ${error.message}`, error);
-          // Exit with a general error code
-          process.exit(1);
+
+          instance.on('error', (err: any) => {
+            if (err.code === 'EADDRINUSE' && retryCount < maxRetries) {
+              // Port is in use, try the next port
+              const nextPort = currentPort + 1;
+              logger.warn(`Port ${currentPort} is already in use, trying port ${nextPort}`);
+              instance.close();
+              resolve(startServer(nextPort, retryCount + 1, maxRetries));
+            } else {
+              reject(err);
+            }
+          });
+        } catch (error) {
+          reject(error);
         }
       });
-    } catch (error: any) {
-      // Handle errors from the port check
-      logger.error(`Failed to start server: ${error.message}`);
-      console.error(`Failed to start server: ${error.message}`);
-      process.exit(1);
-    }
+    };
+
+    // Start the HTTP server with port fallback
+    serverInstance = await startServer(port);
     
-    // Set up success handler
-    serverInstance.on('listening', () => {
-      logger.info(`MCP Server running on http://${host}:${port}`);
-      logger.info(`Server name: ${process.env.MCP_NAME || "Dust MCP Bridge"}`);
-      logger.info(`Protocol version: 2024-11-05`);
-      logger.info(`Transports: SSEServerTransport, HTTPStreamTransport`);
-      logger.info(`Session management: Enabled`);
-      logger.info(`Rate limiting: Enabled (100 requests per 15 minutes)`);
-      logger.info(`Dust workspace: ${process.env.DUST_WORKSPACE_ID || "(not configured)"}`);
-      logger.info(`Dust agent: ${process.env.DUST_AGENT_ID || "(not configured)"}`);
-      
-      // Log to console for Claude logs
-      console.error(`Server instance ${instanceId} started on port ${port}`);
+    // Add error handling for the server (for errors after successful startup)
+    serverInstance.on('error', (error: any) => {
+      logger.error('Server error:', error);
     });
-    
-    // Error handler already added before server start
 
     // Set up Express handlers and process management
     if ((mcpServer as any).setupExpressHandlers) {

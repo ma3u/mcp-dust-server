@@ -205,14 +205,44 @@ async function main(): Promise<void> {
     logger.info(`Created conversation: ${conversation.sId}`);
     logger.info(`Created message: ${message.sId}`);
     
-    // Stream the agent's response
-    const streamResult = await dustApi.streamAgentAnswerEvents({
-      conversation,
-      userMessageId: message.sId,
-    });
+    // Stream the agent's response with retry logic
+    let streamResult;
+    let retryCount = 0;
+    const maxRetries = 5;
+    const retryDelay = 3000; // 3 seconds
+    
+    while (retryCount < maxRetries) {
+      logger.info(`Attempting to stream agent response (attempt ${retryCount + 1}/${maxRetries})...`);
+      
+      streamResult = await dustApi.streamAgentAnswerEvents({
+        conversation,
+        userMessageId: message.sId,
+      });
 
-    if (streamResult.isErr()) {
-      throw new Error(`Failed to stream agent response: ${streamResult.error?.message || 'Unknown error'}`);
+      if (streamResult.isErr()) {
+        const errorMessage = streamResult.error?.message || 'Unknown error';
+        logger.warn(`Stream attempt ${retryCount + 1} failed: ${errorMessage}`);
+        
+        // Check if this is a retriable error
+        if (errorMessage.includes("agent hasn't processed") || 
+            errorMessage.includes("Failed to retrieve agent message") ||
+            errorMessage.includes("not found")) {
+          retryCount++;
+          logger.info(`Waiting ${retryDelay/1000} seconds before retry...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
+          continue;
+        } else {
+          // Non-retriable error
+          throw new Error(`Failed to stream agent response: ${errorMessage}`);
+        }
+      } else {
+        // Success
+        break;
+      }
+    }
+    
+    if (retryCount >= maxRetries) {
+      throw new Error(`Failed to stream agent response after ${maxRetries} attempts`);
     }
 
     // Ensure streamResult is defined before accessing its value
@@ -225,24 +255,40 @@ async function main(): Promise<void> {
     logger.info('\nReceiving response in real-time:');
     logger.info('=========================================');
 
-    // Process events from the stream
-    for await (const event of eventStream) {
-      if (!event) continue;
+    // Process events from the stream with improved error handling
+    try {
+      for await (const event of eventStream) {
+        if (!event) continue;
 
-      switch (event.type) {
-        case "user_message_error":
-          logger.error(`User message error: ${event.error?.message}`);
-          break;
-        case "agent_error":
-          logger.error(`Agent error: ${event.error?.message}`);
-          break;
-        case "generation_tokens":
-          process.stdout.write(event.text || '');
-          answer = (answer + (event.text || '')).trim();
-          break;
-        case "agent_message_success":
-          logger.info('\n\n[Message completed]');
-          break;
+        switch (event.type) {
+          case "user_message_error":
+            logger.error(`User message error: ${event.error?.message}`);
+            throw new Error(`User message error: ${event.error?.message || 'Unknown error'}`);
+          case "agent_error":
+            logger.error(`Agent error: ${event.error?.message}`);
+            throw new Error(`Agent error: ${event.error?.message || 'Unknown error'}`);
+          case "generation_tokens":
+            if (event.text) {
+              process.stdout.write(event.text);
+              answer = (answer + event.text).trim();
+            }
+            break;
+          case "agent_message_success":
+            logger.info('\n\n[Message completed]');
+            // Store the final message content if available
+            if (event.message?.content) {
+              answer = event.message.content;
+            }
+            break;
+        }
+      }
+    } catch (streamError) {
+      logger.error(`Error during stream processing: ${streamError instanceof Error ? streamError.message : String(streamError)}`);
+      // If we've already received some content, we can still return it
+      if (answer) {
+        logger.info('\nStream was interrupted but partial response was received');
+      } else {
+        throw streamError;
       }
     }
 
@@ -264,6 +310,15 @@ async function main(): Promise<void> {
     if (error.dustError) {
       logger.error('Dust API error:', error.dustError);
     }
+    
+    // Check if this is a configuration issue
+    if (error.message?.includes('API key') || error.message?.includes('authentication')) {
+      logger.error('\nThis appears to be an authentication issue. Please check your DUST_API_KEY in the .env file.');
+    } else if (error.message?.includes('workspace') || error.message?.includes('agent')) {
+      logger.error('\nThis appears to be a configuration issue. Please check your DUST_WORKSPACE_ID and DUST_AGENT_ID in the .env file.');
+      logger.error(`Current values: Workspace ID: ${process.env.DUST_WORKSPACE_ID}, Agent ID: ${process.env.DUST_AGENT_ID}`);
+    }
+    
     throw error;
   }
 }

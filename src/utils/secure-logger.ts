@@ -1,4 +1,8 @@
 // src/utils/secure-logger.ts
+import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
+
 export interface LoggerOptions {
   /** Sensitive keys to mask in logs */
   sensitiveKeys?: string[];
@@ -8,6 +12,8 @@ export interface LoggerOptions {
   timestamps?: boolean;
   /** Minimum log level to output */
   minLevel?: LogLevel;
+  /** Log file path */
+  logFilePath?: string;
 }
 
 /** Supported log levels */
@@ -24,6 +30,8 @@ export class SecureLogger {
   private maskPattern: string;
   private timestamps: boolean;
   private minLevel: LogLevel;
+  private logFilePath: string;
+  private logFileStream: fs.WriteStream | null = null;
 
   constructor(options: LoggerOptions = {}) {
     this.sensitiveKeys = options.sensitiveKeys || [
@@ -33,6 +41,74 @@ export class SecureLogger {
     this.maskPattern = options.maskPattern || '********';
     this.timestamps = options.timestamps !== undefined ? options.timestamps : true;
     this.minLevel = options.minLevel || LogLevel.INFO;
+    
+    // Set up log file path (default to project's logs directory)
+    this.logFilePath = options.logFilePath || path.resolve(
+      process.cwd(), 
+      'logs',
+      'mcp-server.log'
+    );
+    
+    // Ensure log directory exists
+    const logDir = path.dirname(this.logFilePath);
+    console.error(`Log directory path: ${logDir}`);
+    if (!fs.existsSync(logDir)) {
+      try {
+        fs.mkdirSync(logDir, { recursive: true });
+        console.error(`Created log directory: ${logDir}`);
+      } catch (err) {
+        console.error(`Error creating log directory: ${err}`);
+        // Fallback to a directory we know exists
+        this.logFilePath = path.join(process.cwd(), 'mcp-server.log');
+        console.error(`Falling back to log file: ${this.logFilePath}`);
+      }
+    }
+    
+    // Create or open log file stream
+    this.openLogFile();
+    
+    // Handle process exit to close log file
+    process.on('exit', () => this.closeLogFile());
+    process.on('SIGINT', () => {
+      this.closeLogFile();
+      process.exit(0);
+    });
+  }
+  
+  /**
+   * Open the log file for writing
+   */
+  private openLogFile(): void {
+    try {
+      this.logFileStream = fs.createWriteStream(this.logFilePath, { flags: 'a' });
+      this.writeToLog(`Log file opened at ${new Date().toISOString()}\n`);
+    } catch (error) {
+      // If we can't open the log file, we'll have to use stderr
+      process.stderr.write(`Failed to open log file: ${error}\n`);
+    }
+  }
+  
+  /**
+   * Close the log file
+   */
+  private closeLogFile(): void {
+    if (this.logFileStream) {
+      this.logFileStream.end(`Log file closed at ${new Date().toISOString()}\n`);
+      this.logFileStream = null;
+    }
+  }
+  
+  /**
+   * Write to log file
+   */
+  private writeToLog(message: string): void {
+    if (this.logFileStream) {
+      this.logFileStream.write(message + '\n');
+    } else {
+      // Fallback to stderr if log file is not available
+      // This should only happen if there's an issue with the log file
+      process.stderr.write(message + '\n');
+    }
   }
 
   /**
@@ -85,7 +161,9 @@ export class SecureLogger {
   debug(message: string, ...data: any[]): void {
     if (this.minLevel <= LogLevel.DEBUG) {
       const maskedData = data.map(item => this.maskSensitiveData(item));
-      console.debug(this.formatMessage(`🔍 DEBUG: ${message}`), ...maskedData);
+      const formattedMsg = this.formatMessage(`🔍 DEBUG: ${message}`);
+      const dataStr = maskedData.length > 0 ? ` ${JSON.stringify(maskedData)}` : '';
+      this.writeToLog(`${formattedMsg}${dataStr}`);
     }
   }
 
@@ -95,7 +173,9 @@ export class SecureLogger {
   info(message: string, ...data: any[]): void {
     if (this.minLevel <= LogLevel.INFO) {
       const maskedData = data.map(item => this.maskSensitiveData(item));
-      console.info(this.formatMessage(`ℹ️ INFO: ${message}`), ...maskedData);
+      const formattedMsg = this.formatMessage(`ℹ️ INFO: ${message}`);
+      const dataStr = maskedData.length > 0 ? ` ${JSON.stringify(maskedData)}` : '';
+      this.writeToLog(`${formattedMsg}${dataStr}`);
     }
   }
 
@@ -105,7 +185,9 @@ export class SecureLogger {
   warn(message: string, ...data: any[]): void {
     if (this.minLevel <= LogLevel.WARN) {
       const maskedData = data.map(item => this.maskSensitiveData(item));
-      console.warn(this.formatMessage(`⚠️ WARN: ${message}`), ...maskedData);
+      const formattedMsg = this.formatMessage(`⚠️ WARN: ${message}`);
+      const dataStr = maskedData.length > 0 ? ` ${JSON.stringify(maskedData)}` : '';
+      this.writeToLog(`${formattedMsg}${dataStr}`);
     }
   }
 
@@ -115,7 +197,9 @@ export class SecureLogger {
   error(message: string, ...data: any[]): void {
     if (this.minLevel <= LogLevel.ERROR) {
       const maskedData = data.map(item => this.maskSensitiveData(item));
-      console.error(this.formatMessage(`🔴 ERROR: ${message}`), ...maskedData);
+      const formattedMsg = this.formatMessage(`🔴 ERROR: ${message}`);
+      const dataStr = maskedData.length > 0 ? ` ${JSON.stringify(maskedData)}` : '';
+      this.writeToLog(`${formattedMsg}${dataStr}`);
     }
   }
 
@@ -125,7 +209,8 @@ export class SecureLogger {
   logRequest(request: any): void {
     if (this.minLevel <= LogLevel.INFO) {
       const maskedRequest = this.maskSensitiveData(request);
-      console.info(this.formatMessage('🔵 MCP REQUEST:'), JSON.stringify(maskedRequest, null, 2));
+      const formattedMsg = this.formatMessage('🔵 MCP REQUEST:');
+      this.writeToLog(`${formattedMsg} ${JSON.stringify(maskedRequest, null, 2)}`);
     }
   }
 
@@ -135,7 +220,8 @@ export class SecureLogger {
   logResponse(response: any): void {
     if (this.minLevel <= LogLevel.INFO) {
       const maskedResponse = this.maskSensitiveData(response);
-      console.info(this.formatMessage('🟢 MCP RESPONSE:'), JSON.stringify(maskedResponse, null, 2));
+      const formattedMsg = this.formatMessage('🟢 MCP RESPONSE:');
+      this.writeToLog(`${formattedMsg} ${JSON.stringify(maskedResponse, null, 2)}`);
     }
   }
 }
