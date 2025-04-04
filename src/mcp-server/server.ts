@@ -25,9 +25,64 @@ import { logger } from "../utils/secure-logger.js";
 import { conversationHistory, ConversationMessage } from "../utils/conversation-history.js";
 import { validateMessageRequest, validateInitializeRequest, validateTerminateRequest } from "../schemas/context-validation.js";
 import crypto from 'crypto';
+import { setTimeout } from 'timers/promises';
 
 // Load environment variables
 dotenv.config();
+
+/**
+ * Request tracking infrastructure to manage active requests and their cancellation
+ */
+interface TrackedRequest {
+  abortController: AbortController;
+  startTime: number;
+  sessionId?: string;
+}
+
+const activeRequests = new Map<string, TrackedRequest>();
+
+/**
+ * Track a request with its abort controller for timeout and cancellation management
+ * @param requestId - The unique ID of the request to track
+ * @param abortController - The abort controller for this request
+ * @param sessionId - Optional session ID associated with this request
+ */
+function trackRequest(requestId: string, abortController: AbortController, sessionId?: string): void {
+  activeRequests.set(requestId, {
+    abortController,
+    startTime: Date.now(),
+    sessionId
+  });
+  logger.debug(`Request ${requestId} tracked with abort controller`);
+}
+
+/**
+ * Cancel a tracked request by its ID
+ * @param requestId - The ID of the request to cancel
+ */
+function cancelRequest(requestId: string): void {
+  const req = activeRequests.get(requestId);
+  if (req) {
+    logger.info(`Cancelling request ${requestId}`);
+    req.abortController.abort();
+    activeRequests.delete(requestId);
+  }
+}
+
+/**
+ * Clean up request tracking for completed requests
+ * @param requestId - The ID of the completed request
+ */
+function completeRequest(requestId: string): void {
+  if (activeRequests.has(requestId)) {
+    logger.debug(`Request ${requestId} completed, removing from tracking`);
+    activeRequests.delete(requestId);
+  }
+}
+
+// Default timeout in seconds
+const DEFAULT_TIMEOUT = 30;
+const MCP_TIMEOUT = parseInt(process.env.MCP_TIMEOUT || DEFAULT_TIMEOUT.toString(), 10);
 
 /**
  * Creates and configures a new MCP server instance with Dust API integration.
@@ -67,10 +122,11 @@ export const createMcpServer = () => {
     onRequest: (request: any) => {
       // Add explicit error handling for all requests
       try {
-        // Log request with more details for debugging
-        console.error('MCP Request received:', JSON.stringify(request, null, 2));
-        logger.logRequest(request);
-        logger.debug('Received message:', JSON.stringify(request));
+        // Use non-blocking logging for large requests
+        setImmediate(() => {
+          logger.logRequest(request);
+          logger.debug('Received message:', JSON.stringify(request));
+        });
         
         // Validate request based on method
         if (request.method === 'initialize') {
@@ -83,34 +139,45 @@ export const createMcpServer = () => {
             console.error('Initialize validation succeeded');
           }
         } else if (request.method === 'message') {
-        const validation = validateMessageRequest(request);
-        if (!validation.success) {
-          logger.warn(`Invalid message request: ${JSON.stringify(validation.error.errors)}`);
-        } else {
-          // Add message to conversation history
-          const message = request.params.message;
-          const sessionId = request.sessionId || 'unknown';
-          
-          conversationHistory.addMessage({
-            id: crypto.randomUUID(),
-            sessionId,
-            role: message.role,
-            content: message.content ? JSON.stringify(message.content) : '',
-            timestamp: new Date(),
-            toolCalls: message.tool_calls,
-            metadata: {
-              requestId: request.id
+          const validation = validateMessageRequest(request);
+          if (!validation.success) {
+            logger.warn(`Invalid message request: ${JSON.stringify(validation.error.errors)}`);
+          } else {
+            // Add message to conversation history
+            const message = request.params.message;
+            const sessionId = request.sessionId || 'unknown';
+            
+            conversationHistory.addMessage({
+              id: crypto.randomUUID(),
+              sessionId,
+              role: message.role,
+              content: message.content ? JSON.stringify(message.content) : '',
+              timestamp: new Date(),
+              toolCalls: message.tool_calls,
+              metadata: {
+                requestId: request.id
+              }
+            });
+          }
+        } else if (request.method === 'terminate') {
+          console.error('Processing terminate request');
+          const validation = validateTerminateRequest(request);
+          if (!validation.success) {
+            logger.warn(`Invalid terminate request: ${JSON.stringify(validation.error.errors)}`);
+            console.error('Terminate validation failed:', JSON.stringify(validation.error.errors));
+          } else {
+            // Cancel any in-flight requests for this session
+            if (request.sessionId) {
+              // Find and cancel all requests for this session
+              for (const [requestId, reqData] of activeRequests.entries()) {
+                if (reqData.sessionId === request.sessionId) {
+                  logger.info(`Cancelling request ${requestId} due to session termination`);
+                  cancelRequest(requestId);
+                }
+              }
             }
-          });
+          }
         }
-      } else if (request.method === 'terminate') {
-        console.error('Processing terminate request');
-        const validation = validateTerminateRequest(request);
-        if (!validation.success) {
-          logger.warn(`Invalid terminate request: ${JSON.stringify(validation.error.errors)}`);
-          console.error('Terminate validation failed:', JSON.stringify(validation.error.errors));
-        }
-      }
       } catch (error) {
         console.error('Error in onRequest handler:', error);
         logger.error('Error in onRequest handler:', error);
@@ -156,7 +223,7 @@ export const createMcpServer = () => {
    */
   mcpServer.tool("echo", { 
     message: z.string().describe("Message to echo back")
-  }, async ({ message }) => {
+  }, async ({ message }, context) => {
     logger.info(`Received echo message: ${message}`);
     return { content: [{ type: "text", text: `Echo: ${message}` }] };
   });
@@ -167,8 +234,27 @@ export const createMcpServer = () => {
    */
   mcpServer.tool("dust-query", {
     query: z.string().describe("Your question or request for the AI agent")
-  }, async ({ query }) => {
+  }, async ({ query }, context) => {
     logger.info(`Sending query to Dust agent: ${query}`);
+    
+    // Create abort controller for timeout and cancellation
+    const controller = new AbortController();
+    const { signal } = controller;
+    
+    // Set timeout based on configuration
+    const timeoutMs = MCP_TIMEOUT * 1000;
+    // Use the native setTimeout instead of the promises version to avoid TypeScript errors
+const timeoutId = global.setTimeout(() => {
+  logger.warn(`Request timed out after ${MCP_TIMEOUT} seconds`);
+  controller.abort(new Error(`Request timed out after ${MCP_TIMEOUT} seconds`));
+}, timeoutMs);
+    
+    // Timeout is now handled by the native setTimeout above
+    
+    // Track this request for potential cancellation
+    const requestId = (context && 'id' in context) ? context.id as string : crypto.randomUUID();
+    const sessionId = (context && 'sessionId' in context) ? context.sessionId as string : undefined;
+    trackRequest(requestId, controller, sessionId);
     
     try {
       // Get dust client instance
@@ -176,7 +262,10 @@ export const createMcpServer = () => {
       const client = dustClientInstance.getClient();
       const userContext = dustClientInstance.getUserContext();
       
-          // Create a conversation with the Dust agent
+      // Periodically yield to event loop to prevent blocking
+      await new Promise(resolve => setImmediate(resolve));
+      
+      // Create a conversation with the Dust agent
       const result = await client.createConversation({
         title: "MCP Bridge Query",
         visibility: "unlisted",
@@ -200,10 +289,10 @@ export const createMcpServer = () => {
       const { conversation, message } = result.value;
       logger.info(`Created conversation: ${conversation.sId}, message: ${message.sId}`);
       
-      // Log conversation and message IDs for reference
-      logger.debug(`Conversation ID: ${conversation.sId}, Message ID: ${message.sId}`);
+      // Yield to event loop again
+      await new Promise(resolve => setImmediate(resolve));
       
-      // Stream the agent's response
+      // Stream the agent's response with the abort signal
       const streamResult = await client.streamAgentAnswerEvents({
         conversation,
         userMessageId: message.sId,
@@ -221,7 +310,22 @@ export const createMcpServer = () => {
       let chainOfThought = "";
       
       try {
+        // Track last time we yielded to event loop
+        let lastYield = Date.now();
+        const CHUNK_PROCESSING_LIMIT = 100; // ms
+        
         for await (const event of eventStream) {
+          // Check if we need to yield to event loop
+          if (Date.now() - lastYield > CHUNK_PROCESSING_LIMIT) {
+            await new Promise(resolve => setImmediate(resolve));
+            lastYield = Date.now();
+            
+            // Check if operation was aborted
+            if (signal.aborted) {
+              throw new Error("Operation aborted: " + signal.reason);
+            }
+          }
+          
           if (!event) continue;
           
           switch (event.type) {
@@ -257,6 +361,17 @@ export const createMcpServer = () => {
         }
         
       } catch (streamError) {
+        // Check if this was an abort error
+        if (signal.aborted) {
+          logger.warn("Stream processing aborted: " + signal.reason);
+          return { 
+            content: [{ 
+              type: "text", 
+              text: `Request timed out or was cancelled: ${signal.reason}` 
+            }] 
+          };
+        }
+        
         logger.error("Error processing stream:", streamError);
         return { 
           content: [{ 
@@ -267,6 +382,17 @@ export const createMcpServer = () => {
       }
       
     } catch (error) {
+      // Check if this was an abort error
+      if (signal.aborted) {
+        logger.warn("Operation aborted: " + signal.reason);
+        return { 
+          content: [{ 
+            type: "text", 
+            text: `Request timed out or was cancelled: ${signal.reason}` 
+          }] 
+        };
+      }
+      
       logger.error("Exception communicating with Dust:", error);
       return { 
         content: [{ 
@@ -274,6 +400,14 @@ export const createMcpServer = () => {
           text: `Error querying Dust agent: ${error instanceof Error ? error.message : String(error)}` 
         }] 
       };
+    } finally {
+      // Clean up regardless of success or failure
+      completeRequest(requestId);
+      if (!controller.signal.aborted) {
+        controller.abort(); // Ensure controller is aborted
+      }
+      // Clear the timeout to prevent memory leaks
+      clearTimeout(timeoutId);
     }
   });
 
@@ -799,13 +933,13 @@ export const createMcpServer = () => {
     process.on('SIGTERM', () => gracefulShutdown(server));
     process.on('SIGINT', () => gracefulShutdown(server));
 
-    function gracefulShutdown(server: any) {
+    function gracefulShutdown(server: any): void {
       server.close(() => {
         console.log('Server closed');
         process.exit(0);
       });
 
-      setTimeout(() => {
+      global.setTimeout(() => {
         console.error('Force shutdown');
         process.exit(1);
       }, 5000);
