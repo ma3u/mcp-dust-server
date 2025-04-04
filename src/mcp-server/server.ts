@@ -53,7 +53,8 @@ function trackRequest(requestId: string, abortController: AbortController, sessi
     startTime: Date.now(),
     sessionId
   });
-  logger.debug(`Request ${requestId} tracked with abort controller`);
+  logger.info(`[${new Date().toISOString()}] Request ${requestId} tracked with abort controller${sessionId ? `, session: ${sessionId}` : ''}`);
+  logger.info(`[${new Date().toISOString()}] Total active requests: ${activeRequests.size}`);
 }
 
 /**
@@ -63,9 +64,13 @@ function trackRequest(requestId: string, abortController: AbortController, sessi
 function cancelRequest(requestId: string): void {
   const req = activeRequests.get(requestId);
   if (req) {
-    logger.info(`Cancelling request ${requestId}`);
+    const duration = Math.round((Date.now() - req.startTime) / 1000);
+    logger.info(`[${new Date().toISOString()}] Cancelling request ${requestId}, duration: ${duration}s, session: ${req.sessionId || 'undefined'}`);
     req.abortController.abort();
     activeRequests.delete(requestId);
+    logger.info(`[${new Date().toISOString()}] Total active requests after cancellation: ${activeRequests.size}`);
+  } else {
+    logger.warn(`[${new Date().toISOString()}] Attempted to cancel unknown request: ${requestId}`);
   }
 }
 
@@ -74,14 +79,19 @@ function cancelRequest(requestId: string): void {
  * @param requestId - The ID of the completed request
  */
 function completeRequest(requestId: string): void {
-  if (activeRequests.has(requestId)) {
-    logger.debug(`Request ${requestId} completed, removing from tracking`);
+  const req = activeRequests.get(requestId);
+  if (req) {
+    const duration = Math.round((Date.now() - req.startTime) / 1000);
+    logger.info(`[${new Date().toISOString()}] Request ${requestId} completed, duration: ${duration}s, session: ${req.sessionId || 'undefined'}`);
     activeRequests.delete(requestId);
+    logger.info(`[${new Date().toISOString()}] Total active requests after completion: ${activeRequests.size}`);
+  } else {
+    logger.warn(`[${new Date().toISOString()}] Attempted to complete unknown request: ${requestId}`);
   }
 }
 
 // Default timeout in seconds
-const DEFAULT_TIMEOUT = 30;
+const DEFAULT_TIMEOUT = 60;
 const MCP_TIMEOUT = parseInt(process.env.MCP_TIMEOUT || DEFAULT_TIMEOUT.toString(), 10);
 
 /**
@@ -224,8 +234,13 @@ export const createMcpServer = () => {
   mcpServer.tool("echo", { 
     message: z.string().describe("Message to echo back")
   }, async ({ message }, context) => {
-    logger.info(`Received echo message: ${message}`);
-    return { content: [{ type: "text", text: `Echo: ${message}` }] };
+    logger.info(`[${new Date().toISOString()}] Received echo message: ${JSON.stringify({ message }, null, 2)}`);
+    const sessionId = (context && 'sessionId' in context) ? context.sessionId as string : undefined;
+    logger.info(`Session ID for echo request: ${sessionId || 'undefined'}`);
+    
+    const response = { content: [{ type: "text" as const, text: `Echo: ${message}` }] };
+    logger.info(`[${new Date().toISOString()}] Sending echo response: ${JSON.stringify(response, null, 2)}`);
+    return response;
   });
 
   /**
@@ -235,6 +250,9 @@ export const createMcpServer = () => {
   mcpServer.tool("dust-query", {
     query: z.string().describe("Your question or request for the AI agent")
   }, async ({ query }, context) => {
+    logger.info(`[${new Date().toISOString()}] Received dust-query request: ${JSON.stringify({ query }, null, 2)}`);
+    const requestSessionId = (context && 'sessionId' in context) ? context.sessionId as string : undefined;
+    logger.info(`Session ID for dust-query request: ${requestSessionId || 'undefined'}`);
     logger.info(`Sending query to Dust agent: ${query}`);
     
     // Create abort controller for timeout and cancellation
@@ -355,9 +373,13 @@ const timeoutId = global.setTimeout(() => {
         }
         
         if (answer) {
-          return { content: [{ type: "text", text: answer }] };
+          const response = { content: [{ type: "text" as const, text: answer }] };
+          logger.info(`[${new Date().toISOString()}] Sending dust-query response: ${JSON.stringify(response, null, 2)}`);
+          return response;
         } else {
-          return { content: [{ type: "text", text: "No response from agent" }] };
+          const response = { content: [{ type: "text" as const, text: "No response from agent" }] };
+          logger.info(`[${new Date().toISOString()}] Sending dust-query empty response`);
+          return response;
         }
         
       } catch (streamError) {
@@ -819,7 +841,8 @@ const timeoutId = global.setTimeout(() => {
               };
             }
           } catch (error) {
-            logger.error(`Error processing message: ${error instanceof Error ? error.message : String(error)}`);
+            logger.error(`[${new Date().toISOString()}] Error processing message: ${error instanceof Error ? error.message : String(error)}`);
+            logger.error(`Stack trace: ${error instanceof Error && error.stack ? error.stack : 'No stack trace available'}`);
             return {
               jsonrpc: '2.0',
               error: {
@@ -859,7 +882,8 @@ const timeoutId = global.setTimeout(() => {
         };
       }
     } catch (error) {
-      logger.error(`Error handling HTTP Stream message: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`[${new Date().toISOString()}] Error handling HTTP Stream message: ${error instanceof Error ? error.message : String(error)}`);
+      logger.error(`Stack trace: ${error instanceof Error && error.stack ? error.stack : 'No stack trace available'}`);
       return {
         jsonrpc: '2.0',
         error: {
@@ -883,6 +907,7 @@ const timeoutId = global.setTimeout(() => {
     app.post('/stream', (req: any, res: any) => {
       try {
         if (req.body && req.body.method === 'initialize') {
+          logger.info(`[${new Date().toISOString()}] Received initialize request: ${JSON.stringify(req.body, null, 2)}`);
           console.error('INIT REQ:', JSON.stringify(req.body));
           
           // Set proper headers for JSON response
@@ -909,12 +934,18 @@ const timeoutId = global.setTimeout(() => {
           // Log the response for debugging
           console.error('INIT RES:', JSON.stringify(response));
           
+          // Log the response with timestamp
+          logger.info(`[${new Date().toISOString()}] Sending initialize response: ${JSON.stringify(response, null, 2)}`);
+          logger.info(`[${new Date().toISOString()}] Connection established with client`);
+          
           // Send the response as proper JSON - use end with stringified JSON to avoid express adding extra content
           return res.end(JSON.stringify(response));
         }
       } catch (error) {
-        // Log the error for debugging
-        console.error('INIT ERROR:', error instanceof Error ? error.stack : String(error));
+        // Log the error for debugging with timestamp
+        logger.error(`[${new Date().toISOString()}] INIT ERROR: ${error instanceof Error ? error.message : String(error)}`);
+        logger.error(`Stack trace: ${error instanceof Error && error.stack ? error.stack : 'No stack trace available'}`);
+        console.error(`[${new Date().toISOString()}] INIT ERROR:`, error instanceof Error ? error.stack : String(error));
         
         // Send a proper error response - use end with stringified JSON to avoid express adding extra content
         const errorResponse = {
@@ -948,6 +979,47 @@ const timeoutId = global.setTimeout(() => {
 
   // Expose the setup function
   (mcpServer as any).setupExpressHandlers = setupExpressHandlers;
+
+  // Add system status monitoring
+  const logSystemStatus = () => {
+    // Log memory usage
+    const memoryUsage = process.memoryUsage();
+    logger.info(`[${new Date().toISOString()}] Memory usage: ${JSON.stringify({
+      rss: `${Math.round(memoryUsage.rss / 1024 / 1024)}MB`,
+      heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`,
+      heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`,
+      external: `${Math.round(memoryUsage.external / 1024 / 1024)}MB`
+    }, null, 2)}`);
+    
+    // Log active requests
+    const count = activeRequests.size;
+    logger.info(`[${new Date().toISOString()}] Active requests: ${count}`);
+    
+    if (count > 0) {
+      // Log details of all active requests
+      const requestDetails = Array.from(activeRequests.entries()).map(([id, req]) => ({
+        id,
+        sessionId: req.sessionId,
+        startTime: new Date(req.startTime).toISOString(),
+        duration: `${Math.round((Date.now() - req.startTime) / 1000)}s`
+      }));
+      
+      logger.info(`[${new Date().toISOString()}] Active request details: ${JSON.stringify(requestDetails, null, 2)}`);
+    }
+    
+    // Log uptime
+    const uptime = process.uptime();
+    const hours = Math.floor(uptime / 3600);
+    const minutes = Math.floor((uptime % 3600) / 60);
+    const seconds = Math.floor(uptime % 60);
+    logger.info(`[${new Date().toISOString()}] Server uptime: ${hours}h ${minutes}m ${seconds}s`);
+  };
+  
+  // Log system status every 5 minutes
+  setInterval(logSystemStatus, 5 * 60 * 1000);
+  
+  // Log initial system status on startup
+  logSystemStatus();
 
   return mcpServer;
 };
