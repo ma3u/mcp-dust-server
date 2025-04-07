@@ -222,8 +222,6 @@ async function main() {
                 // Send response directly through transport
                 console.error('Sending initialize response:', JSON.stringify(response, null, 2));
                 await transport.send(response);
-                
-                // Important: Don't pass initialize messages to the MCP server to avoid double-response
                 return;
               } catch (error) {
                 console.error('Error handling initialize message:', error);
