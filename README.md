@@ -4,25 +4,25 @@ This repository contains an implementation of a Model Context Protocol (MCP) ser
 
 ## Table of Contents
 
-- [Features](#features)
-- [Architecture](#architecture)
-- [Dust.tt Agentic AI](#dusttt-agentic-ai)
-- [Installation](#installation)
-  - [Prerequisites](#prerequisites)
-  - [Steps](#steps)
-- [Starting the Server and Client](#starting-the-server-and-client)
-  - [Development Mode](#development-mode)
-  - [Production Mode](#production-mode)
-  - [Expected Output](#expected-output)
-- [API Endpoints](#api-endpoints)
-- [Debugging](#debugging)
-- [Integration](#integration)
-  - [Windsurf IDE Configuration](#windsurf-ide-configuration)
-  - [Claude Desktop Integration](#claude-desktop-integration)
-- [Testing](#testing)
-- [API Overview](#api-overview)
-- [Developer Documentation](#developer-documentation)
-- [License](#license)
+- [MCP Dust Server](#mcp-dust-server)
+  - [Table of Contents](#table-of-contents)
+  - [Features](#features)
+  - [Architecture](#architecture)
+  - [Dust.tt Agentic AI](#dusttt-agentic-ai)
+  - [Installation](#installation)
+    - [Prerequisites](#prerequisites)
+    - [Steps](#steps)
+  - [Starting the Server and Client](#starting-the-server-and-client)
+    - [Expected Output](#expected-output)
+  - [API Endpoints](#api-endpoints)
+  - [Debugging](#debugging)
+  - [Integration](#integration)
+    - [Windsurf IDE Configuration](#windsurf-ide-configuration)
+    - [Claude Desktop Integration](#claude-desktop-integration)
+  - [Testing](#testing)
+  - [API Overview](#api-overview)
+  - [Developer Documentation](#developer-documentation)
+  - [License](#license)
 
 ## Features
 
@@ -138,28 +138,6 @@ Dust.tt is a platform designed to help organizations build and deploy custom AI 
 ## Starting the Server and Client
 
 You can run the MCP server and test client separately or together. The project provides several npm scripts for different scenarios:
-
-### Development Mode
-
-1. **Start both Server and Client**:
-   ```bash
-   npm run dev
-   ```
-
-
-2. **Start MCP Server only**:
-   ```bash
-   npm run dev:server
-   ```
-
-
-3. **Start Test Client only**:
-   ```bash
-   npm run dev:client
-   ```
-
-
-### Production Mode
 
 1. **Start both Server and Client**:
    ```bash

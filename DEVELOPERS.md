@@ -90,8 +90,10 @@ npx @modelcontextprotocol/inspector
 This repository includes a convenience script to run the MCP Inspector with the correct configuration:
 
 ```bash
-./run-inspector.sh
+npx @modelcontextprotocol/inspector
 ```
+
+![alt text](image.png)
 
 This script will:
 
