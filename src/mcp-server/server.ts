@@ -134,7 +134,6 @@ export const createMcpServer = () => {
      * @param {any} request - The incoming MCP request object
      */
     onRequest: (request: any) => {
-      console.log(`[${new Date().toISOString()}] Received request: ${JSON.stringify(request, null, 2)}`);
       logger.info(`Incoming request: ${JSON.stringify(request, null, 2)}`);
       // Add explicit error handling for all requests
       try {
@@ -146,13 +145,11 @@ export const createMcpServer = () => {
         
         // Validate request based on method
         if (request.method === 'initialize') {
-          console.error('Processing initialize request with params:', JSON.stringify(request.params, null, 2));
           const validation = validateInitializeRequest(request);
           if (!validation.success) {
             logger.warn(`Invalid initialize request: ${JSON.stringify(validation.error.errors)}`);
-            console.error('Initialize validation failed:', JSON.stringify(validation.error.errors));
           } else {
-            console.error('Initialize validation succeeded');
+            logger.info('Initialize validation succeeded');
           }
         } else if (request.method === 'message') {
           const validation = validateMessageRequest(request);
@@ -176,11 +173,9 @@ export const createMcpServer = () => {
             });
           }
         } else if (request.method === 'terminate') {
-          console.error('Processing terminate request');
           const validation = validateTerminateRequest(request);
           if (!validation.success) {
             logger.warn(`Invalid terminate request: ${JSON.stringify(validation.error.errors)}`);
-            console.error('Terminate validation failed:', JSON.stringify(validation.error.errors));
           } else {
             // Cancel any in-flight requests for this session
             if (request.sessionId) {
@@ -195,18 +190,15 @@ export const createMcpServer = () => {
           }
         }
       } catch (error: any) {
-        console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
-        console.error(error.stack);
         logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
         logger.error(error.stack);
         throw error; // re-throw the error to ensure the client gets an error response
       }
     },
     onResponse: (response: any) => {
-      console.log(`[${new Date().toISOString()}] Sending response: ${JSON.stringify(response, null, 2)}`);
+      logger.info(`Sending response: ${JSON.stringify(response, null, 2)}`);
       try {
         // Log response with more details for debugging
-        console.error('MCP Response sent:', JSON.stringify(response, null, 2));
         logger.logResponse(response);
         
         // Add assistant responses to conversation history
@@ -227,7 +219,6 @@ export const createMcpServer = () => {
         });
       }
       } catch (error: any) {
-        console.error('Error in onResponse handler:', error);
         logger.error('Error in onResponse handler:', error);
         logger.error(`[${new Date().toISOString()}] Error in onResponse handler: ${error.message}`, error.stack || 'No stack trace available');
         logger.error(error.stack);
@@ -238,7 +229,6 @@ export const createMcpServer = () => {
         logger.error(`[${new Date().toISOString()}] MCP ERROR: ${error}`);
       } else {
         const stack = error.stack || 'No stack trace available';
-        console.error("MCP ERROR:", error.message, stack);
         logger.error(`[${new Date().toISOString()}] MCP ERROR: ${error.message}`, stack);
         logger.error(stack);
       }
@@ -434,8 +424,6 @@ export const createMcpServer = () => {
       }
       
     } catch (error: any) {
-      console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
-      console.error(error.stack);
       logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
       logger.error(error.stack);
       throw error; // re-throw the error to ensure the client gets an error response
@@ -462,7 +450,6 @@ export const createMcpServer = () => {
     // Special handling for initialize method
     if (message.method === 'initialize') {
       logger.info('Handling initialize method');
-      console.error('Initialize request received:', JSON.stringify(message, null, 2));
       
       try {
         // Validate the initialize request
@@ -502,7 +489,6 @@ export const createMcpServer = () => {
         
         // Always send the response immediately to prevent timeout
         logger.info(`Sending initialize response: ${JSON.stringify(response)}`);
-        console.error('Sending initialize response:', JSON.stringify(response, null, 2));
         
         // If transport is provided, send the response directly
         if (transport && typeof transport.send === 'function') {
@@ -516,8 +502,6 @@ export const createMcpServer = () => {
         
         return response;
       } catch (error: any) {
-        console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
-        console.error(error.stack);
         logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
         logger.error(error.stack);
         throw error; // re-throw the error to ensure the client gets an error response
@@ -566,7 +550,6 @@ export const createMcpServer = () => {
    */
   const handleHttpStreamMessage = async (message: any, sessionId: string) => {
     try {
-      console.log(`[${new Date().toISOString()}] Received request: ${JSON.stringify(message, null, 2)}`);
       logger.debug(`Processing HTTP Stream message: ${JSON.stringify(message)}`);
       
       // Ensure session ID is included in the message
@@ -660,7 +643,9 @@ export const createMcpServer = () => {
                 visibility: "unlisted",
                 message: {
                   content: args.query,
-                  mentions: [{ configurationId: dustClient.getAgentId() }],
+                  mentions: [
+                    { configurationId: dustClient.getAgentId() }
+                  ],
                   context: userContext
                 }
               });
@@ -781,8 +766,6 @@ export const createMcpServer = () => {
               id: message.id
             };
           } catch (error: any) {
-            console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
-            console.error(error.stack);
             logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
             logger.error(error.stack);
             throw error; // re-throw the error to ensure the client gets an error response
@@ -900,8 +883,6 @@ export const createMcpServer = () => {
               };
             }
           } catch (error: any) {
-            console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
-            console.error(error.stack);
             logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
             logger.error(error.stack);
             throw error; // re-throw the error to ensure the client gets an error response
@@ -936,8 +917,6 @@ export const createMcpServer = () => {
         };
       }
     } catch (error: any) {
-      console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
-      console.error(error.stack);
       logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
       logger.error(error.stack);
       throw error; // re-throw the error to ensure the client gets an error response
@@ -961,44 +940,46 @@ export const createMcpServer = () => {
   function setupExpressHandlers(app: any, mcpServer: any) {
     // Add system status monitoring
     const logSystemStatus = () => {
-      // Log memory usage
-      const memoryUsage = process.memoryUsage();
-      
-      // Convert bytes to MB
-      const rssMB = Math.round(memoryUsage.rss / 1024 / 1024);
-      const heapTotalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024);
-      const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
-      const externalMB = Math.round(memoryUsage.external / 1024 / 1024);
-      
-      console.log(`Memory Usage: RSS=${rssMB} MB, Heap Total=${heapTotalMB} MB, Heap Used=${heapUsedMB} MB, External=${externalMB} MB`);
-      
-      // Log active requests
-      const count = activeRequests.size;
-      console.log(`Active requests: ${count}`);
-      
-      if (count > 0) {
-        // Log details of all active requests
-        const requestDetails = Array.from(activeRequests.entries()).map(([id, req]) => ({
-          id,
-          sessionId: req.sessionId,
-          startTime: new Date(req.startTime).toISOString(),
-          duration: `${Math.round((Date.now() - req.startTime) / 1000)}s`
-        }));
-        
-        console.log(`Active request details: ${JSON.stringify(requestDetails, null, 2)}`);
+      try {
+        // Log memory usage
+        const memoryUsage = process.memoryUsage();
+        const rssMB = (memoryUsage.rss / 1024 / 1024).toFixed(2);
+        const heapTotalMB = (memoryUsage.heapTotal / 1024 / 1024).toFixed(2);
+        const heapUsedMB = (memoryUsage.heapUsed / 1024 / 1024).toFixed(2);
+        const externalMB = (memoryUsage.external / 1024 / 1024).toFixed(2);
+
+        logger.info(`Memory Usage: RSS=${rssMB} MB, Heap Total=${heapTotalMB} MB, Heap Used=${heapUsedMB} MB, External=${externalMB} MB`);
+
+        // Log active requests
+        const count = activeRequests.size;
+        logger.info(`Active requests: ${count}`);
+
+        if (activeRequests.size > 0) {
+          // Log details of all active requests
+          const requestDetails = Array.from(activeRequests.entries()).map(([id, req]) => ({
+            id,
+            sessionId: req.sessionId,
+            startTime: new Date(req.startTime).toISOString(),
+            duration: `${Math.round((Date.now() - req.startTime) / 1000)}s`
+          }));
+
+          logger.info(`Active request details: ${JSON.stringify(requestDetails, null, 2)}`);
+        }
+
+        // Log uptime
+        const uptime = process.uptime();
+        const hours = Math.floor(uptime / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        const seconds = Math.floor(uptime % 60);
+        logger.info(`Server uptime: ${hours}h ${minutes}m ${seconds}s`);
+      } catch (error) {
+        logger.error('Error logging server status:', error);
       }
-      
-      // Log uptime
-      const uptime = process.uptime();
-      const hours = Math.floor(uptime / 3600);
-      const minutes = Math.floor((uptime % 3600) / 60);
-      const seconds = Math.floor(uptime % 60);
-      console.log(`Server uptime: ${hours}h ${minutes}m ${seconds}s`);
     };
-    
+
     // Log system status every 5 minutes
     setInterval(logSystemStatus, 5 * 60 * 1000);
-    
+
     // Log initial system status on startup
     logSystemStatus();
 
@@ -1024,7 +1005,7 @@ export const createMcpServer = () => {
         // Pass the message to the SSE transport for handling
         await sseTransport.handlePostMessage(req, res, req.body);
       } catch (error) {
-        console.error("Error handling message:", error);
+        logger.error("Error handling message:", error);
         res.status(500).json({ error: "Failed to process message" });
       }
     });
@@ -1035,12 +1016,12 @@ export const createMcpServer = () => {
 
     function gracefulShutdown(server: any): void {
       server.close(() => {
-        console.log('Server closed');
+        logger.info('Server closed');
         process.exit(0);
       });
 
       global.setTimeout(() => {
-        console.error('Force shutdown');
+        logger.error('Force shutdown');
         process.exit(1);
       }, 5000);
     }
@@ -1056,7 +1037,7 @@ export const createMcpServer = () => {
   const server = http.createServer(app);
 
   server.listen(process.env.PORT || 5001, () => {
-    console.log(`Server is running on port ${process.env.PORT || 5001}`);
+    logger.info(`Server is running on port ${process.env.PORT || 5001}`);
   });
 
   return mcpServer;
