@@ -18,7 +18,7 @@
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import express from 'express';
 import cors from 'cors';
 import http from 'http';
@@ -29,7 +29,9 @@ import { logger } from "../utils/secure-logger.js";
 import { conversationHistory, ConversationMessage } from "../utils/conversation-history.js";
 import { validateMessageRequest, validateInitializeRequest, validateTerminateRequest } from "../schemas/context-validation.js";
 import crypto from 'crypto';
-import { setTimeout } from 'timers/promises';
+import bodyParser from "body-parser";
+
+
 
 // Load environment variables
 dotenv.config();
@@ -275,17 +277,14 @@ export const createMcpServer = () => {
     
     // Create abort controller for timeout and cancellation
     const controller = new AbortController();
-    const { signal } = controller;
+    const signal = controller.signal;
     
     // Set timeout based on configuration
     const timeoutMs = MCP_TIMEOUT * 1000;
-    // Use the native setTimeout instead of the promises version to avoid TypeScript errors
-const timeoutId = global.setTimeout(() => {
-  logger.warn(`Request timed out after ${MCP_TIMEOUT} seconds`);
-  controller.abort(new Error(`Request timed out after ${MCP_TIMEOUT} seconds`));
-}, timeoutMs);
-    
-    // Timeout is now handled by the native setTimeout above
+    const timeoutId = global.setTimeout(() => {
+      logger.warn(`Request timed out after ${MCP_TIMEOUT} seconds`);
+      controller.abort(new Error(`Request timed out after ${MCP_TIMEOUT} seconds`));
+    }, timeoutMs);
     
     // Track this request for potential cancellation
     const requestId = (context && 'id' in context) ? context.id as string : crypto.randomUUID();
@@ -332,12 +331,18 @@ const timeoutId = global.setTimeout(() => {
       const streamResult = await client.streamAgentAnswerEvents({
         conversation,
         userMessageId: message.sId,
+        signal: signal
       });
       
       if (streamResult.isErr()) {
         const errorMessage = streamResult.error?.message || "Unknown error";
         logger.error(`Error streaming response: ${errorMessage}`);
-        return { content: [{ type: "text", text: `Error streaming response: ${errorMessage}` }] };
+        return { 
+          content: [{ 
+            type: "text", 
+            text: `Error streaming response: ${errorMessage}` 
+          }] 
+        };
       }
       
       // Process the streamed response
@@ -652,15 +657,17 @@ const timeoutId = global.setTimeout(() => {
                   context: userContext
                 }
               });
-              
+
+              // Handle the Result pattern
               if (dustResult.isErr()) {
                 const errorMessage = dustResult.error?.message || "Unknown error";
                 logger.error(`Error creating conversation: ${errorMessage}`);
                 throw new Error(errorMessage);
               }
-              
+
               // Get conversation and message details
               const { conversation, message } = dustResult.value;
+              logger.info(`Created conversation: ${conversation.sId}, message: ${message.sId}`);
               
               // Stream the agent's response
               const streamResult = await client.streamAgentAnswerEvents({
@@ -677,18 +684,86 @@ const timeoutId = global.setTimeout(() => {
               // Process the streamed response
               const { eventStream } = streamResult.value;
               let answer = "";
+              let chainOfThought = "";
               
-              for await (const event of eventStream) {
-                if (!event) continue;
+              try {
+                // Track last time we yielded to event loop
+                let lastYield = Date.now();
+                const CHUNK_PROCESSING_LIMIT = 100; // ms
                 
-                if (event.type === "generation_tokens" && event.text) {
-                  answer = (answer + event.text).trim();
-                } else if (event.type === "agent_message_success") {
-                  answer = event.message?.content || answer;
+                for await (const event of eventStream) {
+                  // Check if we need to yield to event loop
+                  if (Date.now() - lastYield > CHUNK_PROCESSING_LIMIT) {
+                    await new Promise(resolve => setImmediate(resolve));
+                    lastYield = Date.now();
+                    
+                    // Check if operation was aborted
+                    const controller = new AbortController();
+                    const signal = controller.signal;
+                    if (signal.aborted) {
+                      throw new Error("Operation aborted: " + signal.reason);
+                    }
+                  }
+                  
+                  if (!event) continue;
+                  
+                  switch (event.type) {
+                    case "user_message_error":
+                      logger.error(`User message error: ${event.error?.message || "Unknown error"}`);
+                      return { content: [{ type: "text", text: `User message error: ${event.error?.message || "Unknown error"}` }] };
+                      
+                    case "agent_error":
+                      logger.error(`Agent error: ${event.error?.message || "Unknown error"}`);
+                      return { content: [{ type: "text", text: `Agent error: ${event.error?.message || "Unknown error"}` }] };
+                      
+                    case "generation_tokens":
+                      if (event.classification === "tokens") {
+                        answer = (answer + event.text).trim();
+                      } else if (event.classification === "chain_of_thought") {
+                        chainOfThought += event.text;
+                      }
+                      break;
+                      
+                    case "agent_message_success":
+                      answer = event.message?.content || answer;
+                      break;
+                      
+                    default:
+                      // Ignore other event types
+                  }
                 }
+                
+                if (answer) {
+                  const response = { content: [{ type: "text" as const, text: answer }] };
+                  logger.info(`[${new Date().toISOString()}] Sending dust-query response: ${JSON.stringify(response, null, 2)}`);
+                  return response;
+                } else {
+                  const response = { content: [{ type: "text" as const, text: "No response from agent" }] };
+                  logger.info(`[${new Date().toISOString()}] Sending dust-query empty response`);
+                  return response;
+                }
+                
+              } catch (streamError: any) {
+                // Check if this was an abort error
+                if (signal.aborted) {
+                  logger.warn("Stream processing aborted: " + signal.reason);
+                  return { 
+                    content: [{ 
+                      type: "text", 
+                      text: `Request timed out or was cancelled: ${signal.reason}` 
+                    }] 
+                  };
+                }
+                
+                logger.error("Error processing stream:", streamError);
+                return { 
+                  content: [{ 
+                    type: "text", 
+                    text: `Error processing agent response: ${streamError instanceof Error ? streamError.message : String(streamError)}` 
+                  }] 
+                };
               }
               
-              result = { response: answer || "No response from agent" };
             } else {
               // Unknown tool
               logger.warn(`Unknown tool requested: ${tool}`);
@@ -753,15 +828,17 @@ const timeoutId = global.setTimeout(() => {
                     context: userContext
                   }
                 });
-                
+
+                // Handle the Result pattern
                 if (dustResult.isErr()) {
                   const errorMessage = dustResult.error?.message || "Unknown error";
                   logger.error(`Error creating conversation: ${errorMessage}`);
                   throw new Error(errorMessage);
                 }
-                
+
                 // Get conversation and message details
                 const { conversation, message } = dustResult.value;
+                logger.info(`Created conversation: ${conversation.sId}, message: ${message.sId}`);
                 
                 // Stream the agent's response
                 const streamResult = await client.streamAgentAnswerEvents({
@@ -884,52 +961,74 @@ const timeoutId = global.setTimeout(() => {
    * This customization ensures initialize requests are handled according to the MCP spec
    * and provides better error handling for protocol compliance
    */
-  const setupExpressHandlers = (app: any, server: any) => {
-    app.post('/stream', (req: any, res: any) => {
-      console.log(`[${new Date().toISOString()}] Received request: ${JSON.stringify(req.body, null, 2)}`);
-      logger.info('Received POST request to /stream');
+  function setupExpressHandlers(app: any, mcpServer: any) {
+    // Add system status monitoring
+    const logSystemStatus = () => {
+      // Log memory usage
+      const memoryUsage = process.memoryUsage();
+      
+      // Convert bytes to MB
+      const rssMB = Math.round(memoryUsage.rss / 1024 / 1024);
+      const heapTotalMB = Math.round(memoryUsage.heapTotal / 1024 / 1024);
+      const heapUsedMB = Math.round(memoryUsage.heapUsed / 1024 / 1024);
+      const externalMB = Math.round(memoryUsage.external / 1024 / 1024);
+      
+      console.log(`Memory Usage: RSS=${rssMB} MB, Heap Total=${heapTotalMB} MB, Heap Used=${heapUsedMB} MB, External=${externalMB} MB`);
+      
+      // Log active requests
+      const count = activeRequests.size;
+      console.log(`Active requests: ${count}`);
+      
+      if (count > 0) {
+        // Log details of all active requests
+        const requestDetails = Array.from(activeRequests.entries()).map(([id, req]) => ({
+          id,
+          sessionId: req.sessionId,
+          startTime: new Date(req.startTime).toISOString(),
+          duration: `${Math.round((Date.now() - req.startTime) / 1000)}s`
+        }));
+        
+        console.log(`Active request details: ${JSON.stringify(requestDetails, null, 2)}`);
+      }
+      
+      // Log uptime
+      const uptime = process.uptime();
+      const hours = Math.floor(uptime / 3600);
+      const minutes = Math.floor((uptime % 3600) / 60);
+      const seconds = Math.floor(uptime % 60);
+      console.log(`Server uptime: ${hours}h ${minutes}m ${seconds}s`);
+    };
+    
+    // Log system status every 5 minutes
+    setInterval(logSystemStatus, 5 * 60 * 1000);
+    
+    // Log initial system status on startup
+    logSystemStatus();
+
+    // Store the SSE transport at a higher scope
+    let sseTransport: SSEServerTransport | undefined;
+
+    // Your existing SSE endpoint
+    app.get("/sse", async (req: any, res: any) => {
+      // Create SSE transport and set response headers
+      sseTransport = new SSEServerTransport("/messages", res);
+
+      // Connect the transport to your MCP server
+      await mcpServer.connect(sseTransport);
+    });
+
+    // Add this missing endpoint
+    app.post("/messages", async (req: any, res: any) => {
+      if (!sseTransport) {
+        return res.status(500).json({ error: "SSE transport not initialized" });
+      }
+
       try {
-        if (req.body && req.body.method === 'initialize') {
-          logger.info(`[${new Date().toISOString()}] Received initialize request: ${JSON.stringify(req.body, null, 2)}`);
-          console.error('INIT REQ:', JSON.stringify(req.body));
-          
-          // Set proper headers for JSON response
-          res.setHeader('Content-Type', 'application/json');
-          res.setHeader('Connection', 'keep-alive');
-          
-          // Create a valid JSON-RPC 2.0 response
-          const response = {
-            jsonrpc: "2.0",
-            result: {
-              protocolVersion: "2024-11-05",
-              serverInfo: {
-                name: "dust-mcp-server",
-                version: "1.0.0"
-              },
-              capabilities: {
-                toolRegistry: true,
-                sessionManagement: true
-              }
-            },
-            id: req.body.id || 0
-          };
-          
-          // Log the response for debugging
-          console.error('INIT RES:', JSON.stringify(response));
-          
-          // Log the response with timestamp
-          logger.info(`[${new Date().toISOString()}] Sending initialize response: ${JSON.stringify(response, null, 2)}`);
-          logger.info(`[${new Date().toISOString()}] Connection established with client`);
-          
-          // Send the response as proper JSON - use end with stringified JSON to avoid express adding extra content
-          return res.end(JSON.stringify(response));
-        }
-      } catch (error: any) {
-        console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
-        console.error(error.stack);
-        logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
-        logger.error(error.stack);
-        throw error; // re-throw the error to ensure the client gets an error response
+        // Pass the message to the SSE transport for handling
+        await sseTransport.handlePostMessage(req, res, req.body);
+      } catch (error) {
+        console.error("Error handling message:", error);
+        res.status(500).json({ error: "Failed to process message" });
       }
     });
 
@@ -950,70 +1049,18 @@ const timeoutId = global.setTimeout(() => {
     }
   };
 
-  /**
-   * Expose the setup function
-   */
-  (mcpServer as any).setupExpressHandlers = setupExpressHandlers;
-
-  let sseTransport: SSEServerTransport;
-
-  // Set up SSE endpoint
   const app = express();
-  app.get("/sse", async (req, res) => {
-    sseTransport = new SSEServerTransport("/messages", res);
-    await mcpServer.connect(sseTransport);
-  });
+  app.use(cors());
+  app.use(bodyParser.json());
+  app.use(bodyParser.urlencoded({ extended: true }));
 
-  // Add messages endpoint
-  app.post("/messages", async (req, res) => {
-    if (!sseTransport) {
-      return res.status(500).send("SSE transport not initialized");
-    }
-    
-    // Pass the request body explicitly to fix body parsing issues
-    await sseTransport.handlePostMessage(req, res, req.body);
-  });
+  setupExpressHandlers(app, mcpServer);
 
-  // Add system status monitoring
-  const logSystemStatus = () => {
-    // Log memory usage
-    const memoryUsage = process.memoryUsage();
-    logger.info(`[${new Date().toISOString()}] Memory usage: ${JSON.stringify({
-      rss: `${Math.round(memoryUsage.rss / 1024 / 1024)}MB`,
-      heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)}MB`,
-      heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)}MB`,
-      external: `${Math.round(memoryUsage.external / 1024 / 1024)}MB`
-    }, null, 2)}`);
-    
-    // Log active requests
-    const count = activeRequests.size;
-    logger.info(`[${new Date().toISOString()}] Active requests: ${count}`);
-    
-    if (count > 0) {
-      // Log details of all active requests
-      const requestDetails = Array.from(activeRequests.entries()).map(([id, req]) => ({
-        id,
-        sessionId: req.sessionId,
-        startTime: new Date(req.startTime).toISOString(),
-        duration: `${Math.round((Date.now() - req.startTime) / 1000)}s`
-      }));
-      
-      logger.info(`[${new Date().toISOString()}] Active request details: ${JSON.stringify(requestDetails, null, 2)}`);
-    }
-    
-    // Log uptime
-    const uptime = process.uptime();
-    const hours = Math.floor(uptime / 3600);
-    const minutes = Math.floor((uptime % 3600) / 60);
-    const seconds = Math.floor(uptime % 60);
-    logger.info(`[${new Date().toISOString()}] Server uptime: ${hours}h ${minutes}m ${seconds}s`);
-  };
-  
-  // Log system status every 5 minutes
-  setInterval(logSystemStatus, 5 * 60 * 1000);
-  
-  // Log initial system status on startup
-  logSystemStatus();
+  const server = http.createServer(app);
+
+  server.listen(process.env.PORT || 5001, () => {
+    console.log(`Server is running on port ${process.env.PORT || 5001}`);
+  });
 
   return mcpServer;
 };

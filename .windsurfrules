@@ -1,5 +1,40 @@
 ### Architecture Analysis:
 - Need to bridge MCP protocol with Dust API while maintaining state[1][2]
+- One of the most critical aspects of MCP server development is proper logging. Since the stdio transport reserves stdout for protocol responses, improper logging can break your server's functionality.
+- The standard stdio transport in MCP reserves stdout for protocol communication, making traditional console logging problematic. Instead, implement one of these alternatives: console.error("Debug information"); and logger.debug("Debug information"); to log in a seperate log
+- For more complex servers, implement MDC (Mapped Diagnostic Context) to add contextual information to log entries: https://dev.to/codenameone/logging-best-practices-mdc-ingestion-and-scale-12fa
+  1. Create a utility class that handles MDC operations
+  2. Set MDC values at the beginning of request processing
+  3. Clear MDC values when request processing is complete
+  4. Handle thread pool cleanup for asynchronous operations
+- Implementing MCP Core Concepts:
+  1. Resources Implementation; Resources provide file-like data that can be read by clients:
+   - Implement proper path validation to prevent path traversal attacks
+   - Use asynchronous operations for I/O-bound tasks
+   - Set appropriate content types for different resource types
+   - Implement caching for frequently accessed resources
+  2. Tools Implementation; Tools are functions that can be called by the LLM
+   - Provide clear descriptions and input schemas
+   - Implement proper error handling and validation
+   - Return well-structured responses
+   - Make tools idempotent when possible
+  3. Prompts Implementation; Prompts provide pre-written templates for users:
+   - Create reusable templates with clear variable placeholders
+   - Document the purpose and usage of each prompt
+   - Provide sensible defaults for optional variables
+   - Group related prompts together logically
+- Error Handling Best Practices:
+- Log detailed error information for debugging
+  - Return user-friendly error messages to clients
+  - Use appropriate error types and codes
+  - Handle both expected and unexpected errors
+  - Avoid exposing sensitive information in error messages
+- Using MCP Inspector for Debugging; The MCP Inspector is a valuable tool for debugging and testing MCP servers:
+  1. Start your MCP server
+  2. Run the MCP Inspector client
+  3. Connect to your server
+  4. Test tools, resources, and prompts interactively
+- Implement rate limiting for external API calls
 - SSE required for real-time updates[9]
 - use modelcontextprotocol/mcp-core 
 - Use the SDK adheres to MCP's JSON-RPC 2.0 messaging format
@@ -72,13 +107,22 @@ Follow the MCP Lifecycle: Implement the three key stages—Initialization, Messa
 - Context-aware agent prompting[7]
 - Error propagation handling[5]
 
-5. **Documentation**:
+5. **Unit Testing**
+- Implement comprehensive testing for your MCP server:
+- Write tests for all tools, resources, and prompts
+- Test both success and error paths
+- Mock external dependencies
+- Use test fixtures for consistent inputs
+- Implement integration tests with the MCP Inspector
+
+6. **Documentation**:
 - Document all tools, resources, and endpoints clearly for developers and the end users using your server.
 
 ## Troubleshooting
 
 - If you have issues with the server implementation, check the reference implementation for type script you can find on the offical website: https://github.com/modelcontextprotocol/servers?tab=readme-ov-file#-reference-servers
-
+- Use the MCP Inspector for debugging and testing MCP servers
+- Check the logs in logs folder and the console for errors, also the Cloude Desktop logs
 
 [1] https://github.com/modelcontextprotocol/typescript-sdk
 [2] https://github.com/dust-tt/dust-sdk-js
