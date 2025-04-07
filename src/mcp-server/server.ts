@@ -18,6 +18,10 @@
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse';
+import express from 'express';
+import cors from 'cors';
+import http from 'http';
 import { z } from "zod";
 import * as dotenv from 'dotenv';
 import { dustClient, DustClient } from "../api/dust-client.js";
@@ -130,6 +134,8 @@ export const createMcpServer = () => {
      * @param {any} request - The incoming MCP request object
      */
     onRequest: (request: any) => {
+      console.log(`[${new Date().toISOString()}] Received request: ${JSON.stringify(request, null, 2)}`);
+      logger.info(`Incoming request: ${JSON.stringify(request, null, 2)}`);
       // Add explicit error handling for all requests
       try {
         // Use non-blocking logging for large requests
@@ -188,12 +194,16 @@ export const createMcpServer = () => {
             }
           }
         }
-      } catch (error) {
-        console.error('Error in onRequest handler:', error);
-        logger.error('Error in onRequest handler:', error);
+      } catch (error: any) {
+        console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+        console.error(error.stack);
+        logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+        logger.error(error.stack);
+        throw error; // re-throw the error to ensure the client gets an error response
       }
     },
     onResponse: (response: any) => {
+      console.log(`[${new Date().toISOString()}] Sending response: ${JSON.stringify(response, null, 2)}`);
       try {
         // Log response with more details for debugging
         console.error('MCP Response sent:', JSON.stringify(response, null, 2));
@@ -216,14 +226,22 @@ export const createMcpServer = () => {
           }
         });
       }
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error in onResponse handler:', error);
         logger.error('Error in onResponse handler:', error);
+        logger.error(`[${new Date().toISOString()}] Error in onResponse handler: ${error.message}`, error.stack || 'No stack trace available');
+        logger.error(error.stack);
       }
     },
-    onError: (error: Error) => {
-      console.error("MCP ERROR:", error.message, error.stack);
-      logger.error("MCP ERROR:", error.message, error.stack);
+    onError: (error: Error | string) => {
+      if (typeof error === 'string') {
+        logger.error(`[${new Date().toISOString()}] MCP ERROR: ${error}`);
+      } else {
+        const stack = error.stack || 'No stack trace available';
+        console.error("MCP ERROR:", error.message, stack);
+        logger.error(`[${new Date().toISOString()}] MCP ERROR: ${error.message}`, stack);
+        logger.error(stack);
+      }
     }
   });
 
@@ -382,7 +400,7 @@ const timeoutId = global.setTimeout(() => {
           return response;
         }
         
-      } catch (streamError) {
+      } catch (streamError: any) {
         // Check if this was an abort error
         if (signal.aborted) {
           logger.warn("Stream processing aborted: " + signal.reason);
@@ -403,25 +421,12 @@ const timeoutId = global.setTimeout(() => {
         };
       }
       
-    } catch (error) {
-      // Check if this was an abort error
-      if (signal.aborted) {
-        logger.warn("Operation aborted: " + signal.reason);
-        return { 
-          content: [{ 
-            type: "text", 
-            text: `Request timed out or was cancelled: ${signal.reason}` 
-          }] 
-        };
-      }
-      
-      logger.error("Exception communicating with Dust:", error);
-      return { 
-        content: [{ 
-          type: "text", 
-          text: `Error querying Dust agent: ${error instanceof Error ? error.message : String(error)}` 
-        }] 
-      };
+    } catch (error: any) {
+      console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+      console.error(error.stack);
+      logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+      logger.error(error.stack);
+      throw error; // re-throw the error to ensure the client gets an error response
     } finally {
       // Clean up regardless of success or failure
       completeRequest(requestId);
@@ -432,8 +437,6 @@ const timeoutId = global.setTimeout(() => {
       clearTimeout(timeoutId);
     }
   });
-
-  // Add more tools as needed
 
   /**
    * Override the initialize method handler to ensure proper response
@@ -500,29 +503,12 @@ const timeoutId = global.setTimeout(() => {
         }
         
         return response;
-      } catch (error) {
-        logger.error(`Error handling initialize request: ${error}`);
-        console.error('Error handling initialize request:', error);
-        
-        // Ensure we still send a response even if there's an error
-        const errorResponse = {
-          jsonrpc: '2.0',
-          result: {
-            protocolVersion: '2024-11-05',
-            serverInfo: {
-              name: process.env.MCP_NAME || "Dust MCP Bridge",
-              version: '1.0.0'
-            },
-            capabilities: {}
-          },
-          id: message.id
-        };
-        
-        if (transport && typeof transport.send === 'function') {
-          await transport.send(errorResponse);
-        }
-        
-        return errorResponse;
+      } catch (error: any) {
+        console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+        console.error(error.stack);
+        logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+        logger.error(error.stack);
+        throw error; // re-throw the error to ensure the client gets an error response
       }
     }
     
@@ -568,6 +554,7 @@ const timeoutId = global.setTimeout(() => {
    */
   const handleHttpStreamMessage = async (message: any, sessionId: string) => {
     try {
+      console.log(`[${new Date().toISOString()}] Received request: ${JSON.stringify(message, null, 2)}`);
       logger.debug(`Processing HTTP Stream message: ${JSON.stringify(message)}`);
       
       // Ensure session ID is included in the message
@@ -721,16 +708,12 @@ const timeoutId = global.setTimeout(() => {
               result,
               id: message.id
             };
-          } catch (error) {
-            logger.error(`Error executing tool: ${error instanceof Error ? error.message : String(error)}`);
-            return {
-              jsonrpc: '2.0',
-              error: { 
-                code: -32603, 
-                message: `Internal error: ${error instanceof Error ? error.message : 'Unknown error'}` 
-              },
-              id: message.id
-            };
+          } catch (error: any) {
+            console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+            console.error(error.stack);
+            logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+            logger.error(error.stack);
+            throw error; // re-throw the error to ensure the client gets an error response
           }
         } else if (message.method === 'message') {
           // Handle message request - this is where tool calls are processed
@@ -741,14 +724,17 @@ const timeoutId = global.setTimeout(() => {
             if (toolCall && toolCall.name) {
               let result;
               
+              logger.info(`Received tool call for ${toolCall.name}`);
+              logger.debug(`Tool call arguments: ${JSON.stringify(toolCall.parameters)}`);
+              
               // Process based on the tool name
               if (toolCall.name === 'echo') {
-                const echoMessage = toolCall.parameters?.message;
-                logger.info(`Received echo message: ${echoMessage}`);
-                result = { content: [{ type: "text", text: `Echo: ${echoMessage}` }] };
+                // Echo tool implementation
+                logger.info(`Executing echo tool with message: ${toolCall.parameters?.message}`);
+                result = { content: [{ type: "text", text: `Echo: ${toolCall.parameters?.message}` }] };
               } else if (toolCall.name === 'dust-query') {
-                const query = toolCall.parameters?.query;
-                logger.info(`Sending query to Dust agent: ${query}`);
+                // Dust query implementation
+                logger.info(`Executing dust-query tool with query: ${toolCall.parameters?.query}`);
                 
                 // Get dust client instance
                 const dustClientInstance = DustClient.getInstance();
@@ -760,7 +746,7 @@ const timeoutId = global.setTimeout(() => {
                   title: "MCP Bridge Query",
                   visibility: "unlisted",
                   message: {
-                    content: query,
+                    content: toolCall.parameters?.query,
                     mentions: [
                       { configurationId: dustClient.getAgentId() }
                     ],
@@ -768,43 +754,42 @@ const timeoutId = global.setTimeout(() => {
                   }
                 });
                 
-                // Process the Dust result
                 if (dustResult.isErr()) {
                   const errorMessage = dustResult.error?.message || "Unknown error";
                   logger.error(`Error creating conversation: ${errorMessage}`);
-                  result = { content: [{ type: "text", text: `Error: ${errorMessage}` }] };
-                } else {
-                  // Get conversation and message details
-                  const { conversation, message } = dustResult.value;
+                  throw new Error(errorMessage);
+                }
+                
+                // Get conversation and message details
+                const { conversation, message } = dustResult.value;
+                
+                // Stream the agent's response
+                const streamResult = await client.streamAgentAnswerEvents({
+                  conversation,
+                  userMessageId: message.sId,
+                });
+                
+                if (streamResult.isErr()) {
+                  const errorMessage = streamResult.error?.message || "Unknown error";
+                  logger.error(`Error streaming response: ${errorMessage}`);
+                  throw new Error(errorMessage);
+                }
+                
+                // Process the streamed response
+                const { eventStream } = streamResult.value;
+                let answer = "";
+                
+                for await (const event of eventStream) {
+                  if (!event) continue;
                   
-                  // Stream the agent's response
-                  const streamResult = await client.streamAgentAnswerEvents({
-                    conversation,
-                    userMessageId: message.sId,
-                  });
-                  
-                  if (streamResult.isErr()) {
-                    const errorMessage = streamResult.error?.message || "Unknown error";
-                    logger.error(`Error streaming response: ${errorMessage}`);
-                    result = { content: [{ type: "text", text: `Error streaming response: ${errorMessage}` }] };
-                  } else {
-                    // Process the streamed response
-                    const { eventStream } = streamResult.value;
-                    let answer = "";
-                    
-                    for await (const event of eventStream) {
-                      if (!event) continue;
-                      
-                      if (event.type === "generation_tokens" && event.classification === "tokens") {
-                        answer = (answer + event.text).trim();
-                      } else if (event.type === "agent_message_success") {
-                        answer = event.message?.content || answer;
-                      }
-                    }
-                    
-                    result = { content: [{ type: "text", text: answer || "No response from agent" }] };
+                  if (event.type === "generation_tokens" && event.classification === "tokens") {
+                    answer = (answer + event.text).trim();
+                  } else if (event.type === "agent_message_success") {
+                    answer = event.message?.content || answer;
                   }
                 }
+                
+                result = { content: [{ type: "text", text: answer || "No response from agent" }] };
               } else {
                 // Unknown tool
                 result = { content: [{ type: "text", text: `Unknown tool: ${toolCall.name}` }] };
@@ -840,17 +825,12 @@ const timeoutId = global.setTimeout(() => {
                 id: message.id
               };
             }
-          } catch (error) {
-            logger.error(`[${new Date().toISOString()}] Error processing message: ${error instanceof Error ? error.message : String(error)}`);
-            logger.error(`Stack trace: ${error instanceof Error && error.stack ? error.stack : 'No stack trace available'}`);
-            return {
-              jsonrpc: '2.0',
-              error: {
-                code: -32603,
-                message: `Internal error: ${error instanceof Error ? error.message : 'Unknown error'}`
-              },
-              id: message.id
-            };
+          } catch (error: any) {
+            console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+            console.error(error.stack);
+            logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+            logger.error(error.stack);
+            throw error; // re-throw the error to ensure the client gets an error response
           }
         } else if (message.method === 'terminate') {
           // Handle terminate request
@@ -881,17 +861,12 @@ const timeoutId = global.setTimeout(() => {
           id: message.id !== undefined ? message.id : null
         };
       }
-    } catch (error) {
-      logger.error(`[${new Date().toISOString()}] Error handling HTTP Stream message: ${error instanceof Error ? error.message : String(error)}`);
-      logger.error(`Stack trace: ${error instanceof Error && error.stack ? error.stack : 'No stack trace available'}`);
-      return {
-        jsonrpc: '2.0',
-        error: {
-          code: -32603,
-          message: `Internal error: ${error instanceof Error ? error.message : 'Unknown error'}`
-        },
-        id: message.id !== undefined ? message.id : null
-      };
+    } catch (error: any) {
+      console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+      console.error(error.stack);
+      logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+      logger.error(error.stack);
+      throw error; // re-throw the error to ensure the client gets an error response
     }
   };
 
@@ -902,9 +877,17 @@ const timeoutId = global.setTimeout(() => {
    */
   (mcpServer as any).handleHttpStreamMessage = handleHttpStreamMessage;
 
-  // Proper initialize handler with protocol validation
+  // Add more tools as needed
+
+  /**
+   * Proper initialize handler with protocol validation
+   * This customization ensures initialize requests are handled according to the MCP spec
+   * and provides better error handling for protocol compliance
+   */
   const setupExpressHandlers = (app: any, server: any) => {
     app.post('/stream', (req: any, res: any) => {
+      console.log(`[${new Date().toISOString()}] Received request: ${JSON.stringify(req.body, null, 2)}`);
+      logger.info('Received POST request to /stream');
       try {
         if (req.body && req.body.method === 'initialize') {
           logger.info(`[${new Date().toISOString()}] Received initialize request: ${JSON.stringify(req.body, null, 2)}`);
@@ -941,22 +924,12 @@ const timeoutId = global.setTimeout(() => {
           // Send the response as proper JSON - use end with stringified JSON to avoid express adding extra content
           return res.end(JSON.stringify(response));
         }
-      } catch (error) {
-        // Log the error for debugging with timestamp
-        logger.error(`[${new Date().toISOString()}] INIT ERROR: ${error instanceof Error ? error.message : String(error)}`);
-        logger.error(`Stack trace: ${error instanceof Error && error.stack ? error.stack : 'No stack trace available'}`);
-        console.error(`[${new Date().toISOString()}] INIT ERROR:`, error instanceof Error ? error.stack : String(error));
-        
-        // Send a proper error response - use end with stringified JSON to avoid express adding extra content
-        const errorResponse = {
-          jsonrpc: "2.0",
-          error: { 
-            code: -32603, 
-            message: "Internal server error: " + (error instanceof Error ? error.message : String(error)) 
-          },
-          id: req.body?.id || null
-        };
-        return res.status(500).end(JSON.stringify(errorResponse));
+      } catch (error: any) {
+        console.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+        console.error(error.stack);
+        logger.error(`[${new Date().toISOString()}] Error processing request: ${error.message}`, error.stack || 'No stack trace available');
+        logger.error(error.stack);
+        throw error; // re-throw the error to ensure the client gets an error response
       }
     });
 
@@ -977,8 +950,29 @@ const timeoutId = global.setTimeout(() => {
     }
   };
 
-  // Expose the setup function
+  /**
+   * Expose the setup function
+   */
   (mcpServer as any).setupExpressHandlers = setupExpressHandlers;
+
+  let sseTransport: SSEServerTransport;
+
+  // Set up SSE endpoint
+  const app = express();
+  app.get("/sse", async (req, res) => {
+    sseTransport = new SSEServerTransport("/messages", res);
+    await mcpServer.connect(sseTransport);
+  });
+
+  // Add messages endpoint
+  app.post("/messages", async (req, res) => {
+    if (!sseTransport) {
+      return res.status(500).send("SSE transport not initialized");
+    }
+    
+    // Pass the request body explicitly to fix body parsing issues
+    await sseTransport.handlePostMessage(req, res, req.body);
+  });
 
   // Add system status monitoring
   const logSystemStatus = () => {
