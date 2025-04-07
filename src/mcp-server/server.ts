@@ -31,8 +31,6 @@ import { validateMessageRequest, validateInitializeRequest, validateTerminateReq
 import crypto from 'crypto';
 import bodyParser from "body-parser";
 
-
-
 // Load environment variables
 dotenv.config();
 
@@ -277,7 +275,7 @@ export const createMcpServer = () => {
     
     // Create abort controller for timeout and cancellation
     const controller = new AbortController();
-    const signal = controller.signal;
+    const signal: AbortSignal = controller.signal;
     
     // Set timeout based on configuration
     const timeoutMs = MCP_TIMEOUT * 1000;
@@ -328,6 +326,15 @@ export const createMcpServer = () => {
       await new Promise(resolve => setImmediate(resolve));
       
       // Stream the agent's response with the abort signal
+      signal.addEventListener("abort", () => {
+        logger.warn("Stream processing aborted: " + signal.reason);
+        return { 
+          content: [{ 
+            type: "text", 
+            text: `Request timed out or was cancelled: ${signal.reason}` 
+          }] 
+        };
+      });
       const streamResult = await client.streamAgentAnswerEvents({
         conversation,
         userMessageId: message.sId,
@@ -699,7 +706,7 @@ export const createMcpServer = () => {
                     
                     // Check if operation was aborted
                     const controller = new AbortController();
-                    const signal = controller.signal;
+                    const signal: AbortSignal = controller.signal;
                     if (signal.aborted) {
                       throw new Error("Operation aborted: " + signal.reason);
                     }
