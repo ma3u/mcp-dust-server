@@ -275,7 +275,7 @@ export const createMcpServer = () => {
     
     // Create abort controller for timeout and cancellation
     const controller = new AbortController();
-    const signal: AbortSignal = controller.signal;
+    const signal = controller.signal;
     
     // Set timeout based on configuration
     const timeoutMs = MCP_TIMEOUT * 1000;
