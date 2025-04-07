@@ -9,7 +9,7 @@
     "outDir": "dist",
     "sourceMap": true,
     "declaration": true,
-    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "lib": ["ES2022"],
     "types": ["node"],
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,

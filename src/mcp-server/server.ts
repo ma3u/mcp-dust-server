@@ -751,16 +751,6 @@ export const createMcpServer = () => {
                 }
                 
               } catch (streamError: any) {
-                // Check if this was an abort error
-                if (signal.aborted) {
-                  logger.warn("Stream processing aborted: " + signal.reason);
-                  return { 
-                    content: [{ 
-                      type: "text", 
-                      text: `Request timed out or was cancelled: ${signal.reason}` 
-                    }] 
-                  };
-                }
                 
                 logger.error("Error processing stream:", streamError);
                 return { 
