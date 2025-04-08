@@ -18,8 +18,8 @@
 - [x] [P1] Add conversation history storage
 - [x] [P1] Develop context validation schema
 - [x] [P1] Create Dust API test client
-- [ ] [P0] Implement STDIO transport for initial connection for MCP Clients
-- [ ] [P0] Document the STDIO transport for Claude Desktop
+- [x] [P0] Implement STDIO transport for initial connection for MCP Clients
+- [x] [P0] Document the STDIO transport for Claude Desktop
 - [ ] [P1] Implement a local multi-instance Dust MCP Server on STDIO
 - [ ] [P2] Implement a local multi-instance Dust MCP Server on SSE and HTTPStream
 
@@ -33,7 +33,7 @@
 - [ ] [P2] Develop fuzzing tests  
 - [x] [P1] Create JSON-RPC 'run' method test script
 
-- [ ] [P1] Implement comprehensive error handling for all transport methods
+- [x] [P1] Implement comprehensive error handling for all transport methods
 
 ## Deployment Tasks
 

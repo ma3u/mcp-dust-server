@@ -272,17 +272,62 @@ Replace `dist/index.js` with the path to your compiled server entry point.
 
 ### Troubleshooting Common Issues
 
-1. **Server Disconnects Immediately**:
-   - Check your server's `onRequest` and `onResponse` handlers for errors
-   - Verify that your server is properly handling the initialize method
-   - Look for any uncaught exceptions in your server code
+#### Connection Issues with MCP Inspector
 
-2. **Connection Refused**:
-   - Ensure your server is running on port 5001
-   - Check that the SSE endpoint is accessible at [http://localhost:5001/sse](http://localhost:5001/sse)
+1. **Port Configuration Mismatch**:
+   - **Symptom**: Server logs show a different port than what's configured in `.env`
+   - **Cause**: The default port in code (6001) may override your `.env` configuration (5001)
+   - **Solution**:
+     - Ensure your `.env` file has consistent port configuration:
 
-3. **Protocol Version Issues**:
-   - Make sure both your server and the inspector are using the same protocol version (2024-11-05)
+       ```env
+       MCP_PORT=6001
+       MCP_MIN_PORT=6001
+       MCP_MAX_PORT=6050
+       ```
+
+     - Or override at runtime: `MCP_PORT=6001 npm run start:server`
+     - Check `src/config/instance-config.ts` for default port values
+
+2. **STDIO Transport Issues with MCP Inspector**:
+   - **Symptom**: "Error: SSE connection not established" despite configuring stdio
+   - **Cause**: MCP Inspector uses an internal SSE connection for its web interface
+   - **Solution**:
+     - Set `TRANSPORT_MODE=stdio` in your `.env` file
+     - Start server with: `START_MODE=stdio npm run start:server`
+     - Ensure no direct `process.stdout.write()` calls in your code
+     - All logging should be redirected to stderr: `console.log = console.error`
+
+3. **Multiple Response Headers Error**:
+   - **Symptom**: "ERR_HTTP_HEADERS_SENT" in server logs
+   - **Cause**: Multiple responses sent for a single request
+   - **Solution**:
+     - Check middleware for multiple response calls
+     - Ensure proper error handling in request handlers
+     - Verify that async functions properly await all promises
+
+4. **Server Disconnects Immediately**:
+   - **Symptom**: Connection established but immediately drops
+   - **Cause**: Errors in request handlers or initialization
+   - **Solution**:
+     - Check your server's `onRequest` and `onResponse` handlers for errors
+     - Verify that your server is properly handling the initialize method
+     - Look for any uncaught exceptions in your server code
+
+5. **Connection Refused**:
+   - **Symptom**: Cannot connect to server at all
+   - **Cause**: Server not running or wrong port
+   - **Solution**:
+     - Verify server is running: `lsof -i :<port>` (e.g., `lsof -i :6001`)
+     - Check that the SSE endpoint is accessible: `curl http://localhost:6001/sse`
+     - Ensure no firewall is blocking the connection
+
+6. **Protocol Version Issues**:
+   - **Symptom**: Connection established but messages fail
+   - **Cause**: Version mismatch between server and inspector
+   - **Solution**:
+     - Make sure both your server and the inspector use the same protocol version (2024-11-05)
+     - Check `protocolVersion` in your server configuration
 
 ### Best Practices
 

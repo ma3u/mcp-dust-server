@@ -190,6 +190,17 @@ Key endpoints include:
 
 For detailed information about debugging tools and techniques, including the MCP Inspector, please refer to the [Developer Documentation](public/DEVELOPERS.md).
 
+### Troubleshooting Connection Issues
+
+If you're experiencing connection issues with MCP Inspector or other clients, check these common problems:
+
+1. **Port Configuration Mismatch**: Ensure your `.env` file has consistent port settings (MCP_PORT, MCP_MIN_PORT, MCP_MAX_PORT)
+
+2. **Transport Mode**: For Claude Desktop or MCP Inspector with stdio transport, set `TRANSPORT_MODE=stdio` in your `.env`
+
+3. **Multiple Response Headers**: If you see "ERR_HTTP_HEADERS_SENT" errors, check for middleware sending multiple responses
+
+For a comprehensive troubleshooting guide, see the [Troubleshooting Common Issues](public/DEVELOPERS.md#troubleshooting-common-issues) section in the Developer Documentation.
 ## Integration
 
 ### Windsurf IDE Configuration
@@ -262,7 +273,6 @@ For detailed technical information, including project structure, API documentati
 
 
 ---
-
 ## License
 
 This project is licensed under [MIT License](LICENSE).
