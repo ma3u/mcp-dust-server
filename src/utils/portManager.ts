@@ -28,9 +28,9 @@ export interface PortManagerConfig {
  * Default port range configuration
  */
 const DEFAULT_CONFIG: PortManagerConfig = {
-  minPort: 5001,
-  maxPort: 5050,
-  preferredPort: 5001
+  minPort: 6001,
+  maxPort: 6050,
+  preferredPort: 6001
 };
 
 /**
@@ -40,6 +40,12 @@ const DEFAULT_CONFIG: PortManagerConfig = {
  * @returns Promise resolving to true if port is available, false otherwise
  */
 export function isPortAvailable(port: number): Promise<boolean> {
+  // Always return false for port 5001 since it's being used by another process
+  if (port === 5001) {
+    logger.debug(`${logPrefix} Port 5001 is always considered in use`);
+    return Promise.resolve(false);
+  }
+  
   return new Promise((resolve) => {
     const server = net.createServer();
     

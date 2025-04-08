@@ -12,6 +12,7 @@ import { findAvailablePort } from '../utils/portManager.js';
 import { getServiceRegistry } from '../utils/registry-factory.js';
 import { defaultConfig, getInstanceId, getServerName } from '../config/instance-config.js';
 import { v4 as uuidv4 } from 'uuid';
+import { registerFileUploadResources } from './resources/file-upload-resource.js';
 
 // Load environment variables
 dotenv.config();
@@ -66,11 +67,20 @@ app.use(createSessionMiddleware({
 // Track session activity
 app.use(sessionActivityMiddleware());
 
-// Create the MCP server instance
-const mcpServer = createMcpServer();
-
 // Add singleton enforcement
 let serverInstance: any = null;
+let mcpServer: any = null;
+
+// Main function to initialize and start the server
+async function initializeServer() {
+  try {
+    // Create the MCP server instance with HTTP transport type
+    mcpServer = await createMcpServer('http');
+  } catch (error) {
+    logger.error('Failed to initialize MCP server:', error);
+    process.exit(1);
+  }
+}
 
 // Start the server
 async function main() {
@@ -436,6 +446,10 @@ async function main() {
       logger.error('Server error:', error);
     });
 
+    // Register file upload resources
+    logger.info('Registering file upload resources with MCP server');
+    registerFileUploadResources(mcpServer, app);
+    
     // Set up Express handlers and process management
     if ((mcpServer as any).setupExpressHandlers) {
       (mcpServer as any).setupExpressHandlers(app, serverInstance);

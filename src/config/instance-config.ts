@@ -36,9 +36,9 @@ export interface MultiInstanceConfig {
  */
 export const defaultConfig: MultiInstanceConfig = {
   portConfig: {
-    minPort: parseInt(process.env.MCP_MIN_PORT || '5001', 10),
-    maxPort: parseInt(process.env.MCP_MAX_PORT || '5050', 10),
-    preferredPort: parseInt(process.env.MCP_PORT || '5001', 10)
+    minPort: parseInt(process.env.MCP_MIN_PORT || '6001', 10),
+    maxPort: parseInt(process.env.MCP_MAX_PORT || '6050', 10),
+    preferredPort: parseInt(process.env.MCP_PORT || '6001', 10)
   },
   instanceTtl: parseInt(process.env.INSTANCE_TTL || '60', 10),
   serverNamePrefix: process.env.SERVER_NAME_PREFIX || 'Dust MCP Bridge'

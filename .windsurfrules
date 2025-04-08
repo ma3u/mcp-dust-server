@@ -35,7 +35,8 @@
   3. Connect to your server
   4. Test tools, resources, and prompts interactively
 - Implement rate limiting for external API calls
-- SSE required for real-time updates[9]
+- STDIO transport required for initial connection for clients like Claude Desktop
+- SSE required for real-time updates
 - use modelcontextprotocol/mcp-core 
 - Use the SDK adheres to MCP's JSON-RPC 2.0 messaging format
 - use remote (HTTP + SSE) transport mechanisms

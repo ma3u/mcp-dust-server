@@ -2,47 +2,73 @@
 
 ## Immediate Tasks
 
-- [x] [P0] Initialize MCP server scaffolding  
-- [x] [P0] Configure Dust API client  
-- [x] [P0] Implement basic session management  
+- [x] [P0] Initialize MCP server scaffolding
+- [x] [P0] Configure Dust API client
+- [x] [P0] Implement basic session management
 - [x] [P1] Set up SSE transport layer based on the MCP SDK library 
 - [x] [P1] Implement HTTP Stream Transport wrapper
-- [x] [P1] Create secret masking logger  
+- [x] [P1] Create secret masking logger
 - [x] [P1] Use Session management official MCP TypeScript SDK 
 - [x] [P1] Add session management middleware
-- [x] [P0] Implement JSON-RPC 'run' method for direct tool execution
 
 ## Core Features
 
-- [ ] [P0] Implement file upload resource  
-- [x] [P0] Create stream parsing adapter  
-- [x] [P1] Add conversation history storage  
-- [x] [P1] Develop context validation schema   
+- [ ] [P0] Implement file upload resource
+- [x] [P0] Create stream parsing adapter
+- [x] [P1] Add conversation history storage
+- [x] [P1] Develop context validation schema
 - [x] [P1] Create Dust API test client
-- [x] [P0] Implement direct tool execution via 'run' method
-- [ ] [P1] implement a multi-instance MCP Server with dynamic port negotiation (Static Range + Hybrid System)
+- [ ] [P0] Implement STDIO transport for initial connection for MCP Clients
+- [ ] [P0] Document the STDIO transport for Claude Desktop
+- [ ] [P1] Implement a local multi-instance Dust MCP Server on STDIO
+- [ ] [P2] Implement a local multi-instance Dust MCP Server on SSE and HTTPStream
+
   
 ## Testing & Security
 
 - [x] [P0] Write MCP compliance tests (Use the latest MCP spec)
 - [x] [P0] Implement rate limiting  
+- [ ] [P0] Provide STDIO and HTTPStream and SSE Test Clients
 - [ ] [P1] Create load testing scenarios  
 - [ ] [P2] Develop fuzzing tests  
 - [x] [P1] Create JSON-RPC 'run' method test script
+
 - [ ] [P1] Implement comprehensive error handling for all transport methods
 
 ## Deployment Tasks
 
-- [ ] [P0] Build production Docker image  
+- [ ] [P1] Build production Docker image  
 - [ ] [P1] Configure cloud storage buckets  
 - [ ] [P1] Set up monitoring dashboard  
 - [ ] [P2] Implement auto-scaling rules 
+
+## Github
+
+- Please use the Github repository to track the tasks and store the code changes: https://github.com/ma3u/mcp-dust-server
+- Create Github Issues to describe the task before starting the task
+- Use the issue template to describe the task
+- Create a Architecture decision in the repository for each feature and link the issue to the decision in folder public/architecture-decisions
+- in the issue point to the decision and to the respective Github commits
+- larger changes should be done in a feature branch
+- After successful testing please merge the changes into the main branch via Github Pull Request
+- track the implemented features in the todo list
 
 ## JIRA Mapping
 
 [JIRA Project Board](https://p4x-ai.atlassian.net/jira/software/projects/P4XAI/boards/1)
 
 ### Todo List to JIRA Epics/Stories Mapping
+
+#### Core Features Mapping
+
+| Todo Item | JIRA Epic/Story | GitHub Commit |
+|-----------|----------------|---------------|
+| Implement file upload resource | [P4XAI-50](https://p4x-ai.atlassian.net/browse/P4XAI-50): Sprint 4 ([P4XAI-27](https://p4x-ai.atlassian.net/browse/P4XAI-27)) | [Implement temporary file storage service](https://github.com/Ma3u/mcp-dust-server/commit/k1l2m3n) [k1l2m3n] |
+| Create stream parsing adapter | [P4XAI-49](https://p4x-ai.atlassian.net/browse/P4XAI-49): Sprint 3 ([P4XAI-25](https://p4x-ai.atlassian.net/browse/P4XAI-25)) | [Add stream parsing adapter for chunked responses](https://github.com/Ma3u/mcp-dust-server/commit/o4p5q6r) [o4p5q6r] |
+| Add conversation history storage | [P4XAI-49](https://p4x-ai.atlassian.net/browse/P4XAI-49): Sprint 3 ([P4XAI-24](https://p4x-ai.atlassian.net/browse/P4XAI-24)) | [Implement conversation context caching](https://github.com/Ma3u/mcp-dust-server/commit/s7t8u9v) [s7t8u9v] |
+| Develop context validation schema | [P4XAI-59](https://p4x-ai.atlassian.net/browse/P4XAI-59): Sprint 2 ([P4XAI-32](https://p4x-ai.atlassian.net/browse/P4XAI-32)) | [Add Zod schemas for input validation](https://github.com/Ma3u/mcp-dust-server/commit/w1x2y3z) [w1x2y3z] |
+| Create Dust API test client | [P4XAI-49](https://p4x-ai.atlassian.net/browse/P4XAI-49): Sprint 3 ([P4XAI-24](https://p4x-ai.atlassian.net/browse/P4XAI-24)) | [Create test client for Dust API integration](https://github.com/Ma3u/mcp-dust-server/commit/a4b5c6d) [a4b5c6d] |
+| Implement direct tool execution | [P4XAI-49](https://p4x-ai.atlassian.net/browse/P4XAI-49): Sprint 3 ([P4XAI-24](https://p4x-ai.atlassian.net/browse/P4XAI-24)) | [Add JSON-RPC run method for tool execution](https://github.com/Ma3u/mcp-dust-server/commit/e7f8g9h) [e7f8g9h] |
 
 #### Immediate Tasks Mapping
 
@@ -58,16 +84,6 @@
 | Add session management middleware | [P4XAI-59](https://p4x-ai.atlassian.net/browse/P4XAI-59): Sprint 2 ([P4XAI-22](https://p4x-ai.atlassian.net/browse/P4XAI-22)) | [Create Express middleware for session validation](https://github.com/Ma3u/mcp-dust-server/commit/c4d5e6f) [c4d5e6f] |
 | Implement JSON-RPC 'run' method | [P4XAI-58](https://p4x-ai.atlassian.net/browse/P4XAI-58): Sprint 1 ([P4XAI-20](https://p4x-ai.atlassian.net/browse/P4XAI-20)) | [Add direct tool execution via JSON-RPC run method](https://github.com/Ma3u/mcp-dust-server/commit/g7h8i9j) [g7h8i9j] |
 
-#### Core Features Mapping
-
-| Todo Item | JIRA Epic/Story | GitHub Commit |
-|-----------|----------------|---------------|
-| Implement file upload resource | [P4XAI-50](https://p4x-ai.atlassian.net/browse/P4XAI-50): Sprint 4 ([P4XAI-27](https://p4x-ai.atlassian.net/browse/P4XAI-27)) | [Implement temporary file storage service](https://github.com/Ma3u/mcp-dust-server/commit/k1l2m3n) [k1l2m3n] |
-| Create stream parsing adapter | [P4XAI-49](https://p4x-ai.atlassian.net/browse/P4XAI-49): Sprint 3 ([P4XAI-25](https://p4x-ai.atlassian.net/browse/P4XAI-25)) | [Add stream parsing adapter for chunked responses](https://github.com/Ma3u/mcp-dust-server/commit/o4p5q6r) [o4p5q6r] |
-| Add conversation history storage | [P4XAI-49](https://p4x-ai.atlassian.net/browse/P4XAI-49): Sprint 3 ([P4XAI-24](https://p4x-ai.atlassian.net/browse/P4XAI-24)) | [Implement conversation context caching](https://github.com/Ma3u/mcp-dust-server/commit/s7t8u9v) [s7t8u9v] |
-| Develop context validation schema | [P4XAI-59](https://p4x-ai.atlassian.net/browse/P4XAI-59): Sprint 2 ([P4XAI-32](https://p4x-ai.atlassian.net/browse/P4XAI-32)) | [Add Zod schemas for input validation](https://github.com/Ma3u/mcp-dust-server/commit/w1x2y3z) [w1x2y3z] |
-| Create Dust API test client | [P4XAI-49](https://p4x-ai.atlassian.net/browse/P4XAI-49): Sprint 3 ([P4XAI-24](https://p4x-ai.atlassian.net/browse/P4XAI-24)) | [Create test client for Dust API integration](https://github.com/Ma3u/mcp-dust-server/commit/a4b5c6d) [a4b5c6d] |
-| Implement direct tool execution | [P4XAI-49](https://p4x-ai.atlassian.net/browse/P4XAI-49): Sprint 3 ([P4XAI-24](https://p4x-ai.atlassian.net/browse/P4XAI-24)) | [Add JSON-RPC run method for tool execution](https://github.com/Ma3u/mcp-dust-server/commit/e7f8g9h) [e7f8g9h] |
 
 #### Testing & Security Mapping
 

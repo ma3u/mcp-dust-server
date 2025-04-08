@@ -109,12 +109,16 @@ const MCP_TIMEOUT = parseInt(process.env.MCP_TIMEOUT || DEFAULT_TIMEOUT.toString
  * - Support for both SSE and HTTP Stream transports
  * - Error handling and graceful degradation
  * 
+ * @param {string} transportType - The type of transport to use ('stdio' or 'http')
  * @returns {McpServer} A configured MCP server instance ready to connect to transports
  */
-export const createMcpServer = () => {
+export const createMcpServer = async (transportType: 'stdio' | 'http' = 'http') => {
   // Log server configuration for debugging
+  // Import the default config here to ensure we're using the same port range
+  const { defaultConfig } = await import('../config/instance-config.js');
   logger.info('Server configuration:', {
-    port: process.env.MCP_PORT || 5001,
+    port: process.env.MCP_PORT || defaultConfig.portConfig.preferredPort,
+    portRange: `${defaultConfig.portConfig.minPort}-${defaultConfig.portConfig.maxPort}`,
     dustWorkspace: process.env.DUST_WORKSPACE_ID,
     dustAgent: process.env.DUST_AGENT_ID
   });
@@ -933,6 +937,26 @@ export const createMcpServer = () => {
   // Add more tools as needed
 
   /**
+   * Graceful shutdown handler for HTTP server
+   */
+  function gracefulShutdown(server: any): void {
+    if (server) {
+      server.close(() => {
+        logger.info('Server closed');
+        process.exit(0);
+      });
+
+      global.setTimeout(() => {
+        logger.error('Force shutdown');
+        process.exit(1);
+      }, 5000);
+    } else {
+      logger.info('No HTTP server to close');
+      process.exit(0);
+    }
+  }
+
+  /**
    * Proper initialize handler with protocol validation
    * This customization ensures initialize requests are handled according to the MCP spec
    * and provides better error handling for protocol compliance
@@ -1010,35 +1034,33 @@ export const createMcpServer = () => {
       }
     });
 
-    // Process management
-    process.on('SIGTERM', () => gracefulShutdown(server));
-    process.on('SIGINT', () => gracefulShutdown(server));
-
-    function gracefulShutdown(server: any): void {
-      server.close(() => {
-        logger.info('Server closed');
-        process.exit(0);
-      });
-
-      global.setTimeout(() => {
-        logger.error('Force shutdown');
-        process.exit(1);
-      }, 5000);
-    }
+    // Process management is handled at the top level
   };
 
-  const app = express();
-  app.use(cors());
-  app.use(bodyParser.json());
-  app.use(bodyParser.urlencoded({ extended: true }));
+  // Only set up HTTP server if we're using HTTP transport
+  if (transportType === 'http') {
+    const app = express();
+    app.use(cors());
+    app.use(bodyParser.json());
+    app.use(bodyParser.urlencoded({ extended: true }));
 
-  setupExpressHandlers(app, mcpServer);
+    setupExpressHandlers(app, mcpServer);
 
-  const server = http.createServer(app);
-
-  server.listen(process.env.PORT || 5001, () => {
-    logger.info(`Server is running on port ${process.env.PORT || 5001}`);
-  });
+    const server = http.createServer(app);
+    
+    // Use the port from the environment or the default config
+    const port = process.env.MCP_PORT || defaultConfig.portConfig.preferredPort;
+    
+    server.listen(port, () => {
+      logger.info(`HTTP Server is running on port ${port}`);
+    });
+    
+    // Set up signal handlers for graceful shutdown
+    process.on('SIGTERM', () => gracefulShutdown(server));
+    process.on('SIGINT', () => gracefulShutdown(server));
+  } else {
+    logger.info('Using STDIO transport, no HTTP server started');
+  }
 
   return mcpServer;
 };
