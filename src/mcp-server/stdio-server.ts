@@ -36,10 +36,12 @@ async function prepareStdioSession(sessionId: string): Promise<void> {
   // Initialize session in session manager if it doesn't exist
   const sessionExists = await sessionManager.getSession(sessionId);
   if (!sessionExists) {
-    await sessionManager.createSession(sessionId, {
-      transportType: 'stdio'
+    // Create a new session with the provided sessionId and transport type
+    const newSession = sessionManager.createSession({
+      transportType: 'stdio',
+      customSessionId: sessionId // Store the custom session ID in context
     });
-    logger.info(`Created new session with ID: ${sessionId}`);
+    logger.info(`Created new session with ID: ${newSession.id}`);
   } else {
     // Update last activity time
     await sessionManager.updateSession(sessionId, {
