@@ -17,6 +17,7 @@ This document contains technical information for developers working with the MCP
   - [Using the Inspector](#using-the-inspector)
   - [Connection Flow](#connection-flow)
   - [Inspector Features](#inspector-features)
+  - [Using MCP Inspector with stdio Transport](#using-mcp-inspector-with-stdio-transport)
   - [Troubleshooting Common Issues](#troubleshooting-common-issues)
   - [Best Practices](#best-practices)
 - [Testing](#testing)
@@ -178,17 +179,15 @@ npx @modelcontextprotocol/inspector
 
 ### Using the Inspector
 
-This repository includes a convenience script to run the MCP Inspector with the correct configuration:
+To run the MCP Inspector, use the following command:
 
 ```bash
-./run-inspector.sh
+npx @modelcontextprotocol/inspector node dist/index.js
 ```
 
-This script will:
+Replace `dist/index.js` with the path to your compiled server entry point.
 
-1. Clean up any existing inspector processes
-2. Set the correct environment variables
-3. Start the inspector with the right configuration
+This command will start the inspector and connect it to your MCP server using the stdio transport.
 
 Once started, the MCP Inspector will be available at:
 
@@ -210,6 +209,66 @@ Client → MCP Inspector (6277) → Your MCP Server (5001)
 3. **Test Tab**: Send custom messages to your server for testing
 4. **Sessions Tab**: Monitor active sessions and their state
 5. **Configuration Tab**: View and modify the inspector's configuration
+
+### Using MCP Inspector with stdio Transport
+
+Claude Desktop only supports MCP servers using the stdio transport. If you need to test your server with stdio transport for Claude Desktop compatibility, follow these steps:
+
+#### 1. Ensure Your Server Supports stdio
+
+Your server should be implemented using the `StdioServerTransport` from the MCP SDK. Here's an example in TypeScript:
+
+```typescript
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+
+const server = new McpServer({ name: "dust-server", version: "1.0.0" });
+
+// Configure tools, resources, and prompts here
+
+const transport = new StdioServerTransport();
+await server.connect(transport);
+```
+
+#### 2. Start the MCP Inspector with stdio Transport
+
+Run the following command in your terminal:
+
+```bash
+npx @modelcontextprotocol/inspector node dist/index.js
+```
+
+Replace `dist/index.js` with the path to your compiled server entry point.
+
+#### 3. Configure MCP Inspector for stdio
+
+1. Open the MCP Inspector UI in your browser (usually at [http://127.0.0.1:5173](http://127.0.0.1:5173))
+2. Set the Transport Type to **STDIO**
+3. Enter:
+   - Command: `node`
+   - Arguments: `dist/index.js`
+4. Click Connect
+
+#### 4. Verify Connection
+
+- If your server is running correctly, you should see a successful connection message in the Inspector
+- Any errors will appear in the "Error Output from MCP Server" section of the Inspector UI
+
+#### stdio Transport Troubleshooting
+
+1. **Connection Error: Is Your MCP Server Running?**
+   - Ensure your server is running and configured for stdio
+   - Check for any syntax or runtime errors in your server logs
+
+2. **"SSE Connection Not Established" Error**
+   - This error typically occurs when an SSE transport is mistakenly used instead of stdio
+   - Ensure that:
+     - The Inspector's transport type is set to STDIO
+     - Your server uses StdioServerTransport
+
+3. **Node.js Environment Issues**
+   - Ensure you're using a compatible Node.js version (e.g., v22.x)
+   - Verify that all required dependencies are installed (`npm install`)
 
 ### Troubleshooting Common Issues
 

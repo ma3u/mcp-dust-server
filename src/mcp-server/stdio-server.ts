@@ -5,6 +5,9 @@
  * like Claude Desktop. It uses the StdioServerTransport to communicate
  * with clients via standard input/output streams.
  * 
+ * Claude Desktop only supports MCP servers using the stdio transport.
+ * This implementation ensures full compatibility with Claude Desktop.
+ * 
  * @author Ma3u
  * @project P4XAI
  * @jira P4XAI-50
@@ -17,6 +20,34 @@ import { v4 as uuidv4 } from "uuid";
 import { fileUploadService } from "../utils/file-upload-service.js";
 import { conversationHistory } from "../utils/conversation-history.js";
 import { EventEmitter } from "events";
+import { getServiceRegistry } from "../utils/registry-factory.js";
+import { sessionManager } from "../utils/session-manager.js";
+import * as dotenv from 'dotenv';
+
+/**
+ * Prepares the session for STDIO transport
+ * 
+ * @param sessionId - Session ID to prepare
+ */
+async function prepareStdioSession(sessionId: string): Promise<void> {
+  // Load environment variables if not already loaded
+  dotenv.config();
+  
+  // Initialize session in session manager if it doesn't exist
+  const sessionExists = await sessionManager.getSession(sessionId);
+  if (!sessionExists) {
+    await sessionManager.createSession(sessionId, {
+      transportType: 'stdio'
+    });
+    logger.info(`Created new session with ID: ${sessionId}`);
+  } else {
+    // Update last activity time
+    await sessionManager.updateSession(sessionId, {
+      lastActivity: new Date()
+    });
+    logger.info(`Updated existing session with ID: ${sessionId}`);
+  }
+}
 
 /**
  * Starts an MCP server with STDIO transport
@@ -27,19 +58,32 @@ import { EventEmitter } from "events";
  */
 export async function startStdioServer(sessionId?: string): Promise<void> {
   try {
-    // Redirect console.log to stderr to avoid interfering with STDIO transport
+    // CRITICAL: Redirect console.log to stderr to avoid interfering with STDIO transport
+    // Claude Desktop expects only JSON-RPC messages on stdout
     console.log = console.error;
     
     // Generate a session ID if not provided
-    const session = sessionId || uuidv4();
+    const session = sessionId || process.env.MCP_SESSION_ID || uuidv4();
     
     logger.info(`Starting STDIO MCP server with session ID: ${session}`);
+    
+    // Prepare the session for STDIO transport
+    await prepareStdioSession(session);
     
     // Create the MCP server with STDIO transport type
     const mcpServer = await createMcpServer('stdio');
     
     // Create the STDIO transport
     const stdioTransport = new StdioServerTransport(process.stdin, process.stdout, session);
+    
+    // Set up heartbeat for keeping the connection alive
+    // This is important for long-running sessions with Claude Desktop
+    const heartbeatInterval = setInterval(() => {
+      // Send heartbeat to stderr (not stdout)
+      if (process.stderr.writable) {
+        process.stderr.write(JSON.stringify({ type: 'heartbeat', timestamp: new Date().toISOString() }) + '\n');
+      }
+    }, 30000); // 30 second heartbeat
     
     // Connect the transport to the server
     await mcpServer.connect(stdioTransport);
@@ -54,13 +98,18 @@ export async function startStdioServer(sessionId?: string): Promise<void> {
       logger.info("Shutting down STDIO MCP server");
       
       try {
+        // Clear heartbeat interval
+        clearInterval(heartbeatInterval);
+        
         // Clean up resources
         fileUploadService.cleanupSessionFiles(session);
+        
         // Clear conversation history
         logger.info(`Cleaning up conversation history for session: ${session}`);
-        // We don't call any specific method since the ConversationHistory interface
-        // may not have a clearSession or getMessages method
-        // The conversation history will be garbage collected when the session ends
+        conversationHistory.clearSessionHistory(session);
+        
+        // Remove session from session manager
+        await sessionManager.deleteSession(session);
         
         // Close the transport
         await stdioTransport.close();
