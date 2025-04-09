@@ -149,8 +149,34 @@ export async function startStdioServer(sessionId?: string): Promise<void> {
 const isMainModule = import.meta.url === `file://${process.argv[1]}`;
 
 if (isMainModule) {
-  startStdioServer().catch(error => {
-    logger.error(`Unhandled exception in STDIO server: ${error instanceof Error ? error.message : String(error)}`);
+  // Load environment variables - prioritize test environment if specified
+  if (process.env.NODE_ENV === 'test' || process.env.DOTENV_CONFIG_PATH) {
+    const configPath = process.env.DOTENV_CONFIG_PATH || '.env.test';
+    dotenv.config({ path: configPath });
+    logger.info(`Loaded environment from ${configPath}`);
+  } else {
+    dotenv.config();
+    logger.info('Loaded environment from default .env');
+  }
+  
+  // Log key environment variables for debugging
+  logger.info(`Starting STDIO server with MCP_NAME: ${process.env.MCP_NAME}`);
+  
+  // Use a try-catch block to catch and log any uncaught errors
+  try {
+    // Start the STDIO server
+    startStdioServer().catch((error) => {
+      logger.error(`Unhandled exception in STDIO server: ${error instanceof Error ? error.message : String(error)}`);
+      if (error instanceof Error && error.stack) {
+        logger.error(`Stack trace: ${error.stack}`);
+      }
+      process.exit(1);
+    });
+  } catch (error) {
+    logger.error(`Uncaught error in STDIO server: ${error instanceof Error ? error.message : String(error)}`);
+    if (error instanceof Error && error.stack) {
+      logger.error(`Stack trace: ${error.stack}`);
+    }
     process.exit(1);
-  });
+  }
 }

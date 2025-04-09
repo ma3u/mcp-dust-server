@@ -99,13 +99,17 @@ export class StdioServerTransport extends EventEmitter implements Transport {
         logger.debug(`STDIO received: ${line}`);
         
         try {
+          // Parse the JSON message safely
           const message = JSON.parse(line);
           
-          // Add session ID to the message
-          message.sessionId = this.sessionId;
+          // Create a new object with the session ID to avoid prototype issues
+          const messageWithSession = {
+            ...message,
+            sessionId: this.sessionId
+          };
           
           if (this.onMessageCallback) {
-            await this.onMessageCallback(message);
+            await this.onMessageCallback(messageWithSession);
           } else {
             // Buffer the message if no callback is registered yet
             this.messageBuffer.push(line);
@@ -149,8 +153,15 @@ export class StdioServerTransport extends EventEmitter implements Transport {
    */
   public async send(message: any): Promise<void> {
     try {
-      // Ensure the message is serialized as JSON
-      const json = JSON.stringify(message);
+      // Ensure the message is serialized as JSON with proper object handling
+      // Use a replacer function to handle any potential circular references or prototype issues
+      const json = JSON.stringify(message, (key, value) => {
+        // Return a plain object copy for any non-primitive values
+        if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+          return { ...value };
+        }
+        return value;
+      });
       logger.debug(`STDIO sending: ${json}`);
       
       // Write to stdout with a newline
@@ -192,8 +203,16 @@ export class StdioServerTransport extends EventEmitter implements Transport {
       
       for (const message of buffer) {
         try {
+          // Parse the JSON message safely
           const parsed = JSON.parse(message);
-          callback(parsed).catch((error) => {
+          
+          // Create a new object with the session ID to avoid prototype issues
+          const parsedWithSession = {
+            ...parsed,
+            sessionId: this.sessionId
+          };
+          
+          callback(parsedWithSession).catch((error) => {
             logger.error(`Error in message callback: ${error instanceof Error ? error.message : String(error)}`);
           });
         } catch (error) {

@@ -28,7 +28,7 @@
 
 - [x] [P0] Write MCP compliance tests (Use the latest MCP spec)
 - [x] [P0] Implement rate limiting  
-- [ ] [P0] Provide STDIO and HTTPStream and SSE Test Clients
+- [x] [P0] Provide STDIO and HTTPStream and SSE Test Clients
 - [ ] [P1] Create load testing scenarios  
 - [ ] [P2] Develop fuzzing tests  
 - [x] [P1] Create JSON-RPC 'run' method test script

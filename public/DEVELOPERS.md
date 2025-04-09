@@ -4,28 +4,40 @@ This document contains technical information for developers working with the MCP
 
 ## Table of Contents
 
-- [Project Structure](#project-structure)
-- [Project Progress](#project-progress)
-- [API Endpoints](#api-endpoints)
-  - [MCP Server Endpoints](#mcp-server-endpoints)
-  - [Health Check Endpoints](#health-check-endpoints)
-  - [MCP Protocol Endpoints](#mcp-protocol-endpoints)
-  - [Transport Mechanisms](#transport-mechanisms)
-  - [MCP Tools](#mcp-tools)
-- [Debugging with MCP Inspector](#debugging-with-mcp-inspector)
-  - [Installing MCP Inspector](#installing-mcp-inspector)
-  - [Using the Inspector](#using-the-inspector)
-  - [Connection Flow](#connection-flow)
-  - [Inspector Features](#inspector-features)
-  - [Using MCP Inspector with stdio Transport](#using-mcp-inspector-with-stdio-transport)
-  - [Troubleshooting Common Issues](#troubleshooting-common-issues)
-  - [Best Practices](#best-practices)
-- [Testing](#testing)
-  - [Web Client Testing](#web-client-testing)
-  - [Command-Line Testing](#command-line-testing)
-  - [Connection Status Indicators](#connection-status-indicators)
-  - [Heartbeat Mechanism](#heartbeat-mechanism)
-- [Security Considerations](#security-considerations)
+- [MCP Dust Server - Developer Documentation](#mcp-dust-server---developer-documentation)
+  - [Table of Contents](#table-of-contents)
+  - [Project Progress](#project-progress)
+  - [Project Structure](#project-structure)
+  - [API Endpoints](#api-endpoints)
+    - [MCP Server Endpoints](#mcp-server-endpoints)
+    - [Health Check Endpoints](#health-check-endpoints)
+    - [MCP Protocol Endpoints](#mcp-protocol-endpoints)
+    - [Transport Mechanisms](#transport-mechanisms)
+    - [MCP Tools](#mcp-tools)
+  - [Debugging with MCP Inspector](#debugging-with-mcp-inspector)
+    - [Installing MCP Inspector](#installing-mcp-inspector)
+    - [Using the Inspector](#using-the-inspector)
+    - [Connection Flow](#connection-flow)
+    - [Inspector Features](#inspector-features)
+    - [Using MCP Inspector with stdio Transport](#using-mcp-inspector-with-stdio-transport)
+      - [1. Ensure Your Server Supports stdio](#1-ensure-your-server-supports-stdio)
+      - [2. Start the MCP Inspector with stdio Transport](#2-start-the-mcp-inspector-with-stdio-transport)
+      - [3. Configure MCP Inspector for stdio](#3-configure-mcp-inspector-for-stdio)
+      - [4. Verify Connection](#4-verify-connection)
+      - [stdio Transport Troubleshooting](#stdio-transport-troubleshooting)
+    - [Troubleshooting Common Issues](#troubleshooting-common-issues)
+      - [Connection Issues with MCP Inspector](#connection-issues-with-mcp-inspector)
+  - [STDIO Transport Testing](#stdio-transport-testing)
+    - [Running the STDIO Transport Test](#running-the-stdio-transport-test)
+    - [Compliance Verification](#compliance-verification)
+    - [Test Logs](#test-logs)
+    - [Best Practices](#best-practices)
+  - [Testing](#testing)
+    - [Web Client Testing](#web-client-testing)
+    - [Command-Line Testing](#command-line-testing)
+    - [Connection Status Indicators](#connection-status-indicators)
+    - [Heartbeat Mechanism](#heartbeat-mechanism)
+  - [Security Considerations](#security-considerations)
 
 ## Project Progress
 
@@ -288,6 +300,41 @@ Replace `dist/index.js` with the path to your compiled server entry point.
 
      - Or override at runtime: `MCP_PORT=6001 npm run start:server`
      - Check `src/config/instance-config.ts` for default port values
+
+## STDIO Transport Testing
+
+The MCP Dust Server includes a comprehensive test suite for the STDIO transport implementation. This ensures compatibility with clients like Claude Desktop and MCP Inspector that use STDIO for communication.
+
+### Running the STDIO Transport Test
+
+1. Build the project first:
+
+   ```bash
+   npm run build
+   ```
+
+2. Run the STDIO transport test:
+
+   ```bash
+   node dist/tests/stdio-transport-test.js
+   ```
+
+
+
+### Compliance Verification
+
+The STDIO transport test verifies compliance with the following aspects of the MCP specification:
+
+1. **Message Format**: All messages follow the JSON-RPC 2.0 format with required fields
+2. **Session Management**: Sessions are properly created, maintained, and terminated
+3. **Transport Handling**: STDIO streams are correctly used for bidirectional communication
+4. **Error Handling**: Errors are properly formatted and returned
+5. **Heartbeat Mechanism**: Server sends periodic heartbeats to maintain connection
+6. **Tool Execution**: Tools can be called and return results in the expected format
+
+### Test Logs
+
+Test logs are stored in the `logs` directory with the filename pattern `stdio-test-{timestamp}.log`. These logs contain all the messages exchanged between the test client and server, which can be useful for debugging.
 
 2. **STDIO Transport Issues with MCP Inspector**:
    - **Symptom**: "Error: SSE connection not established" despite configuring stdio

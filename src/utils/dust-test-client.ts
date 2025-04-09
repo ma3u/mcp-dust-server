@@ -7,7 +7,7 @@
 import { DustAPI } from '@dust-tt/client';
 import * as dotenv from 'dotenv';
 import { logger } from './secure-logger.js';
-import { DustClient, UserContext } from '../api/dust-client.js';
+import { DustClient } from '../api/dust-client.js';
 
 // Ensure dotenv is configured early
 dotenv.config();
